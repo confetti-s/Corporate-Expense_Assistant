@@ -33,6 +33,9 @@ def register_user(username: str, password: str, name: str, email: str,
                   department_id: str, role: str = 'employee') -> str:
     db = SessionLocal()
     try:
+        if not email or not email.strip():
+            return "邮箱不能为空"
+            
         if db.query(User).filter_by(username=username).first():
             return f"用户名 {username} 已存在"
         user_id = f"U{db.query(User).count() + 1:04d}"

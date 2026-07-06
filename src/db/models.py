@@ -15,7 +15,7 @@ class User(Base):
     password_hash = Column(String(128), nullable=False)
     role = Column(String(20), nullable=False, default='employee')  # employee / manager / admin
     name = Column(String(100), nullable=False)
-    email = Column(String(100))
+    email = Column(String(100),nullable=False)
     department_id = Column(String(32), ForeignKey('department_budget.department_id'))
     created_at = Column(DateTime, default=datetime.now)
 
