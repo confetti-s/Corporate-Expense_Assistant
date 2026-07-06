@@ -141,6 +141,15 @@ def seed_reimbursements(db: Session):
         print("Reimbursement data already exists, skipping")
         return
 
+    # 员工邮箱映射
+    emp_emails = {
+        "E001": "zhangsan@example.com",
+        "E002": "lisi@example.com",
+        "E003": "wangwu@example.com",
+        "E004": "zhaoliu@example.com",
+        "E005": "qianqi@example.com",
+    }
+
     for i in range(15):
         emp_id, emp_name, dept_id = random.choice(employees)
         amount = round(random.uniform(100, 5000), 2)
@@ -163,6 +172,7 @@ def seed_reimbursements(db: Session):
                 "invoice_code": f"INV{random.randint(10000,99999)}",
                 "seller_name": "示例销售方"
             }], ensure_ascii=False),
+            applicant_email=emp_emails.get(emp_id),
             created_at=created_date,
             updated_at=created_date
         )

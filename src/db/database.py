@@ -1,9 +1,17 @@
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, inspect, text, event
 from sqlalchemy.orm import sessionmaker, scoped_session
 from config import DATABASE_URL
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
 
 
 def get_db():

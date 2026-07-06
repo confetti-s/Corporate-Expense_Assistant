@@ -1,8 +1,116 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
 from src.db.models import Reimbursements, ApprovalRecords, DepartmentBudget, User
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import func
+
+
+@tool("查询待审批记录")
+def query_pending_approvals(approver_id: str, start_date: str = "", end_date: str = "", applicant_name: str = "") -> str:
+    """
+    查询审批人待处理的报销单列表，支持按日期范围和申请人姓名筛选
+    :param approver_id: 审批人ID（如S001、M001、A003等）
+    :param start_date: 开始日期，格式YYYY-MM-DD（可选）
+    :param end_date: 结束日期，格式YYYY-MM-DD（可选）
+    :param applicant_name: 申请人姓名筛选（可选，模糊匹配）
+    :return: 待审批记录列表
+    """
+    db = SessionLocal()
+    try:
+        # 查询该审批人的所有待审批记录
+        query = db.query(ApprovalRecords).filter_by(
+            approver_id=approver_id,
+            status="pending"
+        )
+
+        records = query.all()
+        if not records:
+            return f"您当前没有待审批的报销单。"
+
+        # 组装数据并筛选
+        data = []
+        for rec in records:
+            reimb = db.query(Reimbursements).filter_by(id=rec.reimbursement_id).first()
+            if not reimb:
+                continue
+            if reimb.status not in ("pending", "reviewing"):
+                continue
+
+            # 前置级别校验
+            if rec.approval_level > 1:
+                prev_ok = all(
+                    db.query(ApprovalRecords).filter_by(
+                        reimbursement_id=reimb.id,
+                        approval_level=pl
+                    ).first().status == "approved"
+                    for pl in range(1, rec.approval_level)
+                    if db.query(ApprovalRecords).filter_by(
+                        reimbursement_id=reimb.id,
+                        approval_level=pl
+                    ).first()
+                )
+                if not prev_ok:
+                    continue
+
+            # 日期筛选
+            if start_date:
+                try:
+                    sd = datetime.strptime(start_date, '%Y-%m-%d')
+                    if reimb.created_at < sd:
+                        continue
+                except ValueError:
+                    pass
+            if end_date:
+                try:
+                    ed = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+                    if reimb.created_at > ed:
+                        continue
+                except ValueError:
+                    pass
+
+            # 申请人姓名筛选
+            if applicant_name:
+                if applicant_name.lower() not in reimb.employee_name.lower():
+                    continue
+
+            # 获取部门名称
+            dept_name = reimb.department_id
+            dept = db.query(DepartmentBudget).filter_by(department_id=reimb.department_id).first()
+            if dept:
+                dept_name = dept.department_name
+
+            data.append({
+                "reimbursement_no": reimb.reimbursement_no,
+                "applicant": reimb.employee_name,
+                "department": dept_name,
+                "amount": reimb.total_amount,
+                "expense_type": reimb.expense_type,
+                "level": rec.approval_level,
+                "created_at": reimb.created_at,
+            })
+
+        if not data:
+            return f"没有符合条件的待审批记录。"
+
+        # 按提交时间排序
+        data.sort(key=lambda x: x["created_at"], reverse=True)
+
+        result = f"📋 **待审批记录（共 {len(data)} 条）**\n\n"
+        for i, item in enumerate(data, 1):
+            result += f"""**{i}. 报销单号：{item['reimbursement_no']}**
+   申请人：{item['applicant']}
+   部门：{item['department']}
+   金额：{item['amount']:,.2f} 元
+   费用类型：{item['expense_type']}
+   审批级别：L{item['level']}
+   提交时间：{item['created_at'].strftime('%Y-%m-%d %H:%M')}
+   状态：等待您审批
+
+"""
+        result += "---\n💡 您可以说：\"审批通过 RB20260001\" 或 \"驳回 RB20260002，理由是超标\" 来完成审批操作。"
+        return result
+    finally:
+        db.close()
 
 
 @tool("执行审批操作")
@@ -147,11 +255,13 @@ def _send_notification_email(db, reimbursement, action, approver_name, comment):
     try:
         from config import EMAIL_NOTIFICATION_ENABLED
         if not EMAIL_NOTIFICATION_ENABLED:
+            print(f"[邮件通知] EMAIL_NOTIFICATION_ENABLED=False，跳过发送")
             return
     except Exception:
         return
 
     if not reimbursement.applicant_email:
+        print(f"[邮件通知] 申请人 {reimbursement.employee_name}({reimbursement.employee_id}) 无邮箱，跳过发送")
         return
 
     try:
@@ -177,6 +287,7 @@ def _send_next_approver_email(db, reimbursement, next_level):
     try:
         from config import EMAIL_NOTIFICATION_ENABLED
         if not EMAIL_NOTIFICATION_ENABLED:
+            print(f"[邮件通知] EMAIL_NOTIFICATION_ENABLED=False，跳过通知下一级审批人")
             return
     except Exception:
         return

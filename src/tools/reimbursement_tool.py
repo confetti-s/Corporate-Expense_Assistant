@@ -1,6 +1,6 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
-from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords
+from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User
 from datetime import datetime
 
 
@@ -43,6 +43,12 @@ def create_reimbursement(
 
         reimbursement_no = f"RB{year}{str(next_seq).zfill(4)}"
         need_special_approval = total_amount > 3000
+
+        # 自动从User表获取申请人邮箱
+        if not applicant_email:
+            user = db.query(User).filter_by(user_id=employee_id).first()
+            if user and user.email:
+                applicant_email = user.email
 
         record = Reimbursements(
             reimbursement_no=reimbursement_no,

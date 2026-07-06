@@ -471,11 +471,11 @@ def do_approve(selected_no, action, comment, user_state):
 
 # ===================== 注册 =====================
 
-def do_register(username, password, name, department_id, role):
+def do_register(username, password, name, email, department_id, role):
     if not username or not password or not name:
         return "请填写所有必填项"
     from src.db.auth import register_user
-    return register_user(username, password, name, "", department_id, role)
+    return register_user(username, password, name, email or "", department_id, role)
 
 
 # ===================== UI 定义 =====================
@@ -497,6 +497,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             reg_username = gr.Textbox(label="用户名")
             reg_password = gr.Textbox(label="密码", type="password")
             reg_name = gr.Textbox(label="姓名")
+            reg_email = gr.Textbox(label="邮箱", placeholder="如 zhangsan@example.com")
             reg_dept = gr.Dropdown(
                 label="部门",
                 choices=["D001", "D002", "D003", "D004", "D005"],
@@ -694,7 +695,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
         inputs=user_state,
         outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
     )
-    reg_btn.click(fn=do_register, inputs=[reg_username, reg_password, reg_name, reg_dept, reg_role], outputs=reg_msg)
+    reg_btn.click(fn=do_register, inputs=[reg_username, reg_password, reg_name, reg_email, reg_dept, reg_role], outputs=reg_msg)
 
 
 if __name__ == "__main__":
