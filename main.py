@@ -34,10 +34,14 @@ from src.tools.approval_tool import approve_or_reject_reimbursement
 
 agent_available = False
 try:
-    from src.agent.expense_agent import run_agent, test_agent
+    from src.agent.expense_agent import run_agent as agent_run, test_agent
     agent_available = test_agent()
+    print(f"✅ Agent 状态: {'可用' if agent_available else '不可用'}")
 except Exception as e:
-    print(f"Agent不可用：{e}")
+    print(f"❌ Agent 导入失败: {e}")
+    import traceback
+    traceback.print_exc()
+    agent_available = False
 
 TAB_CHAT = "chat"
 TAB_BUDGET = "budget"
@@ -94,37 +98,105 @@ def do_logout(user_state):
 # ===================== 对话报销 =====================
 
 def chat_send(message, chat_history, file_uploads, user_state):
+    """
+    流式输出：
+    1. 用户消息立即显示
+    2. AI显示"正在思考..."
+    3. Agent逐块流式输出
+    """
+
+    print(f"🔍 ===== chat_send 被调用 =====")
+    print(f"🔍 agent_available = {agent_available}")
+    print(f"🔍 message = {message}")
+
     if not message or not message.strip():
-        return "", chat_history or []
-
-    try:
-        enhanced_message = message
-        if file_uploads:
-            files = file_uploads if isinstance(file_uploads, list) else [file_uploads]
-            file_info = []
-            for f in files:
-                if f:
-                    fp = f.name if hasattr(f, 'name') else str(f)
-                    file_info.append(f"[附件: {os.path.basename(fp)}]")
-            if file_info:
-                enhanced_message = message + "\n\n" + "\n".join(file_info)
-
-        # 注入用户信息到消息
-        if user_state:
-            enhanced_message += f"\n[当前用户: {user_state['name']}({user_state['user_id']}), 部门: {user_state['department_id']}]"
-
-        if agent_available:
-            response = run_agent(enhanced_message, chat_history)
-        else:
-            response = "抱歉，智能助手暂不可用，请检查API配置。"
-    except Exception as e:
-        response = f"发送消息时出错：{str(e)}"
+        yield "", chat_history or []
+        return
 
     chat_history = chat_history or []
-    chat_history.append({"role": "user", "content": message})
-    chat_history.append({"role": "assistant", "content": response})
 
-    return "", chat_history
+    # ========= 构造增强消息（发送给Agent）=========
+    enhanced_message = message
+
+    try:
+        if file_uploads:
+            files = file_uploads if isinstance(file_uploads, list) else [file_uploads]
+
+            file_info = []
+
+            for f in files:
+                if f:
+                    fp = f.name if hasattr(f, "name") else str(f)
+                    file_info.append(f"[附件: {os.path.basename(fp)}]")
+
+            if file_info:
+                enhanced_message += "\n\n" + "\n".join(file_info)
+
+        if user_state:
+            enhanced_message += (
+                f"\n[当前用户: {user_state['name']}({user_state['user_id']}), "
+                f"部门: {user_state['department_id']}]"
+            )
+
+    except Exception as e:
+        chat_history.append(
+            {
+                "role": "assistant",
+                "content": f"准备消息失败：{e}"
+            }
+        )
+        yield "", chat_history
+        return
+
+    # ========= 第一步：立即显示用户消息 =========
+    chat_history.append(
+        {
+            "role": "user",
+            "content": message
+        }
+    )
+
+    # ========= 第二步：显示"请稍等..." =========
+    chat_history.append(
+        {
+            "role": "assistant",
+            "content": "请稍等..."
+        }
+    )
+
+    # 立即刷新界面，显示用户消息和"请稍等..."
+    yield "", chat_history
+    print("✅ 已显示 '请稍等...'")
+
+    # ========= 第三步：流式执行Agent =========
+    try:
+        if agent_available:
+            print("🚀 开始流式执行 Agent...")
+            full_response = ""
+            chat_history[-1]["content"] = ""
+            
+            chunk_count = 0
+            for chunk in agent_run(enhanced_message, chat_history[:-1]):
+                chunk_count += 1
+                #print(f"📦 收到第 {chunk_count} 个 chunk: {chunk[:50] if chunk else '空'}...")
+                if chunk:
+                    full_response += chunk
+                    chat_history[-1]["content"] = full_response
+                    yield "", chat_history
+            
+            print(f"✅ 流式完成，共 {chunk_count} 个 chunks，总长度 {len(full_response)}")
+        else:
+            print("⚠️ agent_available = False")
+            response = "抱歉，智能助手暂不可用，请检查API配置。"
+            chat_history[-1]["content"] = response
+            yield "", chat_history
+
+    except Exception as e:
+        print(f"❌ chat_send 错误: {e}")
+        import traceback
+        traceback.print_exc()
+        chat_history[-1]["content"] = f"发送消息时出错：{e}"
+        yield "", chat_history
 
 
 def ocr_file_handler(file, chat_history):
@@ -436,7 +508,11 @@ with gr.Blocks(title="企业财务报销助手") as demo:
 
                     # 右列：对话区
                     with gr.Column(scale=2):
-                        chatbot_display = gr.Chatbot(height=450, label="报销助手对话")
+                        chatbot_display = gr.Chatbot(
+                            
+                            height=450, 
+                            label="报销助手对话"
+                            )
                         with gr.Row():
                             msg_input = gr.Textbox(
                                 placeholder="描述您的报销需求...",
