@@ -1,0 +1,246 @@
+from langchain.tools import tool
+import requests
+import base64
+import json
+from config import BAIDU_OCR_API_KEY, BAIDU_OCR_SECRET_KEY, BAIDU_OCR_TOKEN_URL, BAIDU_OCR_API_URL
+
+_access_token = None
+_token_expire_time = 0
+
+def get_access_token():
+    global _access_token, _token_expire_time
+    import time
+    if _access_token and time.time() < _token_expire_time:
+        return _access_token
+    
+    params = {
+        "grant_type": "client_credentials",
+        "client_id": BAIDU_OCR_API_KEY,
+        "client_secret": BAIDU_OCR_SECRET_KEY
+    }
+    
+    try:
+        response = requests.post(BAIDU_OCR_TOKEN_URL, params=params)
+        response.raise_for_status()
+        result = response.json()
+        
+        if "access_token" in result:
+            _access_token = result["access_token"]
+            _token_expire_time = time.time() + result.get("expires_in", 3600) - 60
+            return _access_token
+        else:
+            raise ValueError(f"获取access_token失败: {result}")
+    except Exception as e:
+        raise RuntimeError(f"获取access_token异常: {str(e)}")
+
+def encode_image(file_path):
+    with open(file_path, "rb") as f:
+        image_data = f.read()
+    return base64.b64encode(image_data).decode("utf-8")
+
+INVOICE_TYPE_MAP = {
+    "vat_invoice": "增值税发票",
+    "taxi_receipt": "出租车票",
+    "train_ticket": "火车票",
+    "quota_invoice": "定额发票",
+    "air_ticket": "飞机行程单",
+    "roll_normal_invoice": "卷票",
+    "printed_invoice": "机打发票",
+    "printed_elec_invoice": "机打电子发票",
+    "bus_ticket": "汽车票",
+    "toll_invoice": "过路过桥费发票",
+    "ferry_ticket": "船票",
+    "motor_vehicle_invoice": "机动车销售发票",
+    "used_vehicle_invoice": "二手车销售发票",
+    "taxi_online_ticket": "网约车行程单",
+    "limit_invoice": "限额发票",
+    "shopping_receipt": "购物小票",
+    "pos_invoice": "POS小票",
+    "others": "其他"
+}
+
+def _extract_field(result_dict, key, default=""):
+    """从 multiple_invoice API 返回的字段中提取文本值。
+    API 返回格式: {"AmountInFiguers": [{"word": "5200.00", "probability": {...}}]}
+    """
+    val = result_dict.get(key, default)
+    if isinstance(val, list) and len(val) > 0:
+        return val[0].get("word", default)
+    if isinstance(val, str):
+        return val
+    return default
+
+
+def parse_invoice_result(result):
+    invoice_type = result.get("type", "others")
+    type_name = INVOICE_TYPE_MAP.get(invoice_type, "未知票据")
+    invoice_result = result.get("result", {})
+
+    amount_str = _extract_field(invoice_result, "AmountInFiguers")
+    raw_code = _extract_field(invoice_result, "InvoiceCode")
+    raw_number = _extract_field(invoice_result, "InvoiceNum")
+
+    # 电子发票：发票代码为空，发票号码为20位（前12位=代码，后8位=号码）
+    if not raw_code and raw_number and len(raw_number) == 20 and raw_number.isdigit():
+        invoice_code = raw_number[:12]
+        invoice_number = raw_number[12:]
+    else:
+        invoice_code = raw_code
+        invoice_number = raw_number
+    invoice_date = _extract_field(invoice_result, "InvoiceDate")
+    seller_name = _extract_field(invoice_result, "SellerName")
+    seller_tax_id = _extract_field(invoice_result, "SellerRegisterNum")
+    buyer_name = _extract_field(invoice_result, "PurchaserName")
+    buyer_tax_id = _extract_field(invoice_result, "PurchaserRegisterNum")
+
+    prob_info = result.get("probability", {})
+    if isinstance(prob_info, dict):
+        probability = f"{prob_info.get('average', 0):.4f}"
+    else:
+        probability = str(prob_info)
+
+    try:
+        amount = float(amount_str.replace(",", "")) if amount_str else 0.0
+    except ValueError:
+        amount = 0.0
+
+    return {
+        "type": invoice_type,
+        "type_name": type_name,
+        "amount": amount,
+        "invoice_code": invoice_code,
+        "invoice_number": invoice_number,
+        "invoice_date": invoice_date,
+        "seller_name": seller_name,
+        "seller_tax_id": seller_tax_id,
+        "buyer_name": buyer_name,
+        "buyer_tax_id": buyer_tax_id,
+        "probability": probability
+    }
+
+@tool("票据OCR识别")
+def ocr_invoice(file_path: str) -> str:
+    """
+    使用百度智能云识别票据图片或PDF中的发票信息
+    :param file_path: 文件路径，支持图片（jpg/jpeg/png/bmp）和PDF格式
+    :return: 结构化的发票信息字符串
+    """
+    if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
+        return "错误：百度OCR API密钥未配置，请在.env文件中设置BAIDU_OCR_API_KEY和BAIDU_OCR_SECRET_KEY"
+    
+    try:
+        access_token = get_access_token()
+        encoded_image = encode_image(file_path)
+        
+        url = f"{BAIDU_OCR_API_URL}?access_token={access_token}"
+        
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        
+        data = {
+            "image": encoded_image,
+            "verify_parameter": "false",
+            "probability": "true",
+            "location": "false"
+        }
+        
+        response = requests.post(url, headers=headers, data=data)
+        response.raise_for_status()
+        result = response.json()
+        
+        if result.get("words_result_num", 0) > 0:
+            invoice_data = parse_invoice_result(result["words_result"][0])
+            
+            return f"""票据识别结果：
+票据类型：{invoice_data['type_name']}
+置信度：{invoice_data['probability']}
+发票代码：{invoice_data['invoice_code']}
+发票号码：{invoice_data['invoice_number']}
+金额：{invoice_data['amount']:,.2f} 元
+开票日期：{invoice_data['invoice_date']}
+销售方名称：{invoice_data['seller_name']}
+销售方税号：{invoice_data['seller_tax_id']}
+购买方名称：{invoice_data['buyer_name']}
+购买方税号：{invoice_data['buyer_tax_id']}"""
+        else:
+            return "识别结果为空，未检测到票据"
+            
+    except Exception as e:
+        return f"票据识别失败：{str(e)}"
+
+@tool("批量票据识别")
+def batch_ocr_invoices(file_paths: str) -> str:
+    """
+    批量识别多张票据
+    :param file_paths: 文件路径列表，用逗号分隔
+    :return: 所有票据的识别结果字符串
+    """
+    if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
+        return "错误：百度OCR API密钥未配置，请在.env文件中设置BAIDU_OCR_API_KEY和BAIDU_OCR_SECRET_KEY"
+    
+    files = [f.strip() for f in file_paths.split(',') if f.strip()]
+    results = []
+    
+    for file_path in files:
+        try:
+            access_token = get_access_token()
+            encoded_image = encode_image(file_path)
+            
+            url = f"{BAIDU_OCR_API_URL}?access_token={access_token}"
+            headers = {"Content-Type": "application/x-www-form-urlencoded"}
+            data = {"image": encoded_image}
+            
+            response = requests.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            result = response.json()
+            
+            if result.get("words_result_num", 0) > 0:
+                invoice_data = parse_invoice_result(result["words_result"][0])
+                results.append({
+                    "file": file_path,
+                    "type_name": invoice_data["type_name"],
+                    "amount": invoice_data["amount"],
+                    "invoice_code": invoice_data["invoice_code"],
+                    "invoice_number": invoice_data["invoice_number"],
+                    "invoice_date": invoice_data["invoice_date"],
+                    "seller_name": invoice_data["seller_name"]
+                })
+            else:
+                results.append({
+                    "file": file_path,
+                    "type_name": "未识别",
+                    "amount": 0.0,
+                    "invoice_code": "",
+                    "invoice_number": "",
+                    "invoice_date": "",
+                    "seller_name": ""
+                })
+        except Exception as e:
+            results.append({
+                "file": file_path,
+                "type_name": f"识别失败: {str(e)}",
+                "amount": 0.0,
+                "invoice_code": "",
+                "invoice_number": "",
+                "invoice_date": "",
+                "seller_name": ""
+            })
+    
+    total_amount = sum(r["amount"] for r in results)
+    
+    result_str = f"批量识别结果（共 {len(results)} 张票据）：\n\n"
+    for i, r in enumerate(results):
+        result_str += f"""票据 {i + 1}：
+文件：{r['file']}
+类型：{r['type_name']}
+金额：{r['amount']:,.2f} 元
+发票代码：{r['invoice_code']}
+发票号码：{r['invoice_number']}
+开票日期：{r['invoice_date']}
+销售方：{r['seller_name']}
+------------------------
+"""
+    result_str += f"\n总金额：{total_amount:,.2f} 元"
+    
+    return result_str
