@@ -55,10 +55,30 @@ CUSTOM_CSS = """
 .user-bar { background: linear-gradient(90deg, #e3f2fd, #f3e5f5); padding: 10px 20px; border-radius: 8px; margin-bottom: 12px; }
 .user-bar span { font-size: 15px; }
 .tab-nav button { font-size: 14px !important; }
+.tab-js-injector { height: 0; overflow: hidden; margin: 0; padding: 0; }
 """
 
 
 # ===================== 认证 =====================
+
+def _tab_visibility_js(show_manager_tabs: bool) -> str:
+    """生成控制预算看板和模拟审批Tab显隐的JS，通过img onerror注入执行"""
+    display = "" if show_manager_tabs else "none"
+    return (
+        f'<img width="0" height="0" style="display:none" src="" onerror="'
+        f"setTimeout(()=>{{"
+        f"document.querySelectorAll('button[role=tab]').forEach(b=>{{"
+        f"const t=b.textContent.trim();"
+        f"if(t==='预算看板'||t==='模拟审批'){{b.style.display='{display}';}}"
+        f"}});"
+        f"if('{display}'==='none'){{"
+        f"const c=[...document.querySelectorAll('button[role=tab]')].find(b=>b.textContent.trim()==='对话报销');"
+        f"if(c)c.click();"
+        f"}}"
+        f"}},300);"
+        f'">'
+    )
+
 
 def do_login(username, password):
     user = authenticate_user(username, password)
@@ -71,16 +91,16 @@ def do_login(username, password):
             gr.Column(visible=False),
             gr.Column(visible=True),
             info,
-            gr.Tab(visible=is_manager),
-            gr.Tab(visible=is_manager),
+            gr.Tabs(selected=TAB_CHAT),
+            _tab_visibility_js(is_manager),
         )
     return (
         None,
         gr.Column(visible=True),
         gr.Column(visible=False),
         "用户名或密码错误",
-        gr.Tab(visible=False),
-        gr.Tab(visible=False),
+        gr.Tabs(selected=TAB_CHAT),
+        _tab_visibility_js(False),
     )
 
 
@@ -90,8 +110,8 @@ def do_logout(user_state):
         gr.Column(visible=True),
         gr.Column(visible=False),
         "",
-        gr.Tab(visible=False),
-        gr.Tab(visible=False),
+        gr.Tabs(selected=TAB_CHAT),
+        _tab_visibility_js(False),
     )
 
 
@@ -112,6 +132,29 @@ def chat_send(message, chat_history, file_uploads, user_state):
     if not message or not message.strip():
         yield "", chat_history or []
         return
+
+    try:
+        enhanced_message = message
+        if file_uploads:
+            files = file_uploads if isinstance(file_uploads, list) else [file_uploads]
+            file_info = []
+            for f in files:
+                if f:
+                    fp = f.name if hasattr(f, 'name') else str(f)
+                    file_info.append(f"[附件: {os.path.basename(fp)}]")
+            if file_info:
+                enhanced_message = message + "\n\n" + "\n".join(file_info)
+
+        # 注入用户信息到消息
+        if user_state:
+            enhanced_message += f"\n[当前用户: {user_state['name']}({user_state['user_id']}), 部门: {user_state['department_id']}, 角色: {user_state['role']}]"
+
+        if agent_available:
+            response = run_agent(enhanced_message, chat_history)
+        else:
+            response = "抱歉，智能助手暂不可用，请检查API配置。"
+    except Exception as e:
+        response = f"发送消息时出错：{str(e)}"
 
     chat_history = chat_history or []
 
@@ -471,6 +514,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     with gr.Column(visible=False) as main_area:
         user_info_bar = gr.Markdown("", elem_classes=["user-bar"])
         logout_btn = gr.Button("退出登录", size="sm")
+        tab_js_injector = gr.HTML(elem_classes=["tab-js-injector"])
 
         with gr.Tabs(selected=TAB_CHAT) as tabs_container:
 
@@ -491,7 +535,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                         gr.Markdown("---")
                         gr.Markdown("### 快捷跳转")
                         jump_progress_btn = gr.Button("查进度 >>", size="sm")
-                        jump_budget_btn = gr.Button("看预算 >>", size="sm")
 
                         if not agent_available:
                             gr.Markdown("**注意:** 智能助手暂不可用")
@@ -501,7 +544,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                             examples=[
                                 "我要报销一笔差旅费",
                                 "查一下报销单RB20260001的进度",
-                                "看看技术部的预算还剩多少",
                             ],
                             inputs=[gr.Textbox(visible=False)],
                         )
@@ -541,7 +583,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                     outputs=[chatbot_display, msg_input]
                 )
                 jump_progress_btn.click(fn=lambda: gr.Tabs(selected=TAB_PROGRESS), outputs=tabs_container)
-                jump_budget_btn.click(fn=lambda: gr.Tabs(selected=TAB_BUDGET), outputs=tabs_container)
 
             # ========== Tab 2: 预算看板 ==========
             with gr.Tab(label="预算看板", id=TAB_BUDGET) as budget_tab:
@@ -586,17 +627,11 @@ with gr.Blocks(title="企业财务报销助手") as demo:
 
                 progress_detail = gr.Textbox(label="报销详情 / 审批链路", lines=12, interactive=False)
 
-                with gr.Row():
-                    jump_approval_from_progress = gr.Button("去审批 >>")
-                    jump_budget_from_progress = gr.Button("查预算 >>")
-
                 # 事件绑定
                 my_reimb_df.select(fn=on_reimb_select, inputs=user_state, outputs=progress_detail)
                 refresh_my_btn.click(fn=load_my_reimbursements, inputs=user_state, outputs=my_reimb_df)
                 query_single_btn.click(fn=query_progress_ui, inputs=reimbursement_no_input, outputs=progress_detail)
                 query_range_btn.click(fn=query_by_date_range, inputs=[date_start, date_end, user_state], outputs=progress_detail)
-                jump_approval_from_progress.click(fn=lambda: gr.Tabs(selected=TAB_APPROVAL), outputs=tabs_container)
-                jump_budget_from_progress.click(fn=lambda: gr.Tabs(selected=TAB_BUDGET), outputs=tabs_container)
 
                 demo.load(fn=load_my_reimbursements, inputs=user_state, outputs=my_reimb_df)
 
@@ -647,17 +682,17 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     login_btn.click(
         fn=do_login,
         inputs=[login_username, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, budget_tab, approval_tab]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
     )
     login_password.submit(
         fn=do_login,
         inputs=[login_username, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, budget_tab, approval_tab]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
     )
     logout_btn.click(
         fn=do_logout,
         inputs=user_state,
-        outputs=[user_state, login_area, main_area, user_info_bar, budget_tab, approval_tab]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
     )
     reg_btn.click(fn=do_register, inputs=[reg_username, reg_password, reg_name, reg_dept, reg_role], outputs=reg_msg)
 
