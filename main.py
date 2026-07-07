@@ -60,6 +60,31 @@ CUSTOM_CSS = """
 """
 
 
+def _render_jump_buttons(text: str) -> str:
+    """将 [[Tab名称]] 替换为可点击的 HTML 按钮"""
+    TAB_LABELS = {
+        "对话报销": "对话报销",
+        "预算看板": "预算看板",
+        "进度查询": "进度查询",
+        "模拟审批": "模拟审批",
+    }
+
+    def replacer(match):
+        label = match.group(1).strip()
+        if label in TAB_LABELS:
+            return (
+                f'<button '
+                f'style="background:#1890ff;color:#fff;border:none;padding:4px 10px;'
+                f'border-radius:4px;cursor:pointer;margin:2px;font-size:13px;" '
+                f'onclick="document.querySelectorAll(\'button[role=tab]\').forEach('
+                f'b=>{{if(b.textContent.trim()===\'{label}\')b.click();}})">'
+                f'{label}</button>'
+            )
+        return match.group(0)
+
+    return re.sub(r'\[\[(.*?)\]\]', replacer, text)
+
+
 # ===================== 认证 =====================
 
 def _tab_visibility_js(show_manager_tabs: bool) -> str:
@@ -257,6 +282,14 @@ def chat_send(message, chat_history, file_uploads, user_state):
                     yield "", chat_history
             
             print(f"✅ 流式完成，共 {chunk_count} 个 chunks，总长度 {len(full_response)}")
+
+            # 将 [[Tab名称]] 替换为可点击的 HTML 按钮
+            if chat_history and chat_history[-1]["role"] == "assistant":
+                original = chat_history[-1]["content"]
+                rendered = _render_jump_buttons(original)
+                if rendered != original:
+                    chat_history[-1]["content"] = rendered
+                    yield "", chat_history
         else:
             print("⚠️ agent_available = False")
             full_response = "抱歉，智能助手暂不可用，请检查API配置。"
@@ -598,9 +631,9 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                     # 右列：对话区
                     with gr.Column(scale=2):
                         chatbot_display = gr.Chatbot(
-                            
-                            height=450, 
-                            label="报销助手对话"
+                            height=450,
+                            label="报销助手对话",
+                            sanitize_html=False
                             )
                         with gr.Row():
                             msg_input = gr.Textbox(
