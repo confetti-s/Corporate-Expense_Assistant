@@ -18,6 +18,7 @@ from src.db.database import init_db, SessionLocal
 from src.db.models import Reimbursements, ApprovalRecords, DepartmentBudget, User, DepartmentApprover
 from src.db.seed_data import main as seed_main
 from src.db.auth import authenticate_user, hash_password
+from src.db.models import Reimbursements, ApprovalRecords, DepartmentBudget, User, DepartmentApprover, ChatHistory
 
 # 初始化数据库
 init_db()
@@ -86,6 +87,10 @@ def do_login(username, password):
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[user["role"]]
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
         is_manager = user["role"] in ("manager", "admin")
+        
+        # 加载历史对话
+        history = load_chat_history(user['user_id'], limit=10)
+        
         return (
             user,
             gr.Column(visible=False),
@@ -93,6 +98,7 @@ def do_login(username, password):
             info,
             gr.Tabs(selected=TAB_CHAT),
             _tab_visibility_js(is_manager),
+            history,  # 加载历史到 chatbot
         )
     return (
         None,
@@ -101,8 +107,8 @@ def do_login(username, password):
         "用户名或密码错误",
         gr.Tabs(selected=TAB_CHAT),
         _tab_visibility_js(False),
+        [],  # 空历史
     )
-
 
 def do_logout(user_state):
     return (
@@ -117,12 +123,59 @@ def do_logout(user_state):
 
 # ===================== 对话报销 =====================
 
+# ===================== 对话历史持久化 =====================
+
+def save_chat_message(user_id: str, role: str, content: str, reimbursement_id: int = None):
+    """保存单条聊天消息到数据库"""
+    if not user_id:
+        return
+    db = SessionLocal()
+    try:
+        record = ChatHistory(
+            user_id=user_id,
+            role=role,
+            content=content,
+            reimbursement_id=reimbursement_id
+        )
+        db.add(record)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"保存聊天记录失败: {e}")
+    finally:
+        db.close()
+
+
+def load_chat_history(user_id: str, limit: int = 10) -> list:
+    """加载用户的最近 N 条聊天历史"""
+    if not user_id:
+        return []
+    db = SessionLocal()
+    try:
+        records = db.query(ChatHistory)\
+            .filter_by(user_id=user_id)\
+            .order_by(ChatHistory.created_at.desc())\
+            .limit(limit)\
+            .all()
+        
+        # 按时间正序返回
+        history = []
+        for record in reversed(records):
+            history.append({
+                "role": record.role,
+                "content": record.content
+            })
+        return history
+    finally:
+        db.close()
+
 def chat_send(message, chat_history, file_uploads, user_state):
     """
-    流式输出：
+    流式输出 + 持久化存储：
     1. 用户消息立即显示
     2. AI显示"正在思考..."
     3. Agent逐块流式输出
+    4. 对话记录持久化到数据库
     """
 
     print(f"🔍 ===== chat_send 被调用 =====")
@@ -132,29 +185,6 @@ def chat_send(message, chat_history, file_uploads, user_state):
     if not message or not message.strip():
         yield "", chat_history or []
         return
-
-    try:
-        enhanced_message = message
-        if file_uploads:
-            files = file_uploads if isinstance(file_uploads, list) else [file_uploads]
-            file_info = []
-            for f in files:
-                if f:
-                    fp = f.name if hasattr(f, 'name') else str(f)
-                    file_info.append(f"[附件: {os.path.basename(fp)}]")
-            if file_info:
-                enhanced_message = message + "\n\n" + "\n".join(file_info)
-
-        # 注入用户信息到消息
-        if user_state:
-            enhanced_message += f"\n[当前用户: {user_state['name']}({user_state['user_id']}), 部门: {user_state['department_id']}, 角色: {user_state['role']}]"
-
-        if agent_available:
-            response = run_agent(enhanced_message, chat_history)
-        else:
-            response = "抱歉，智能助手暂不可用，请检查API配置。"
-    except Exception as e:
-        response = f"发送消息时出错：{str(e)}"
 
     chat_history = chat_history or []
 
@@ -221,7 +251,6 @@ def chat_send(message, chat_history, file_uploads, user_state):
             chunk_count = 0
             for chunk in agent_run(enhanced_message, chat_history[:-1]):
                 chunk_count += 1
-                #print(f"📦 收到第 {chunk_count} 个 chunk: {chunk[:50] if chunk else '空'}...")
                 if chunk:
                     full_response += chunk
                     chat_history[-1]["content"] = full_response
@@ -230,17 +259,32 @@ def chat_send(message, chat_history, file_uploads, user_state):
             print(f"✅ 流式完成，共 {chunk_count} 个 chunks，总长度 {len(full_response)}")
         else:
             print("⚠️ agent_available = False")
-            response = "抱歉，智能助手暂不可用，请检查API配置。"
-            chat_history[-1]["content"] = response
+            full_response = "抱歉，智能助手暂不可用，请检查API配置。"
+            chat_history[-1]["content"] = full_response
             yield "", chat_history
 
     except Exception as e:
         print(f"❌ chat_send 错误: {e}")
         import traceback
         traceback.print_exc()
-        chat_history[-1]["content"] = f"发送消息时出错：{e}"
+        full_response = f"发送消息时出错：{e}"
+        chat_history[-1]["content"] = full_response
         yield "", chat_history
 
+    # ========= 第四步：持久化存储 =========
+    if user_state and user_state.get('user_id'):
+        user_id = user_state['user_id']
+        
+        # 保存用户消息
+        save_chat_message(user_id, "user", message)
+        
+        # 保存助手消息（完整响应）
+        if full_response:
+            save_chat_message(user_id, "assistant", full_response)
+        else:
+            save_chat_message(user_id, "assistant", "无回复")
+        
+        print(f"💾 对话已保存，用户: {user_id}")
 
 def ocr_file_handler(file, chat_history):
     if not file:
@@ -683,12 +727,12 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     login_btn.click(
         fn=do_login,
         inputs=[login_username, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display]
     )
     login_password.submit(
         fn=do_login,
         inputs=[login_username, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display]
     )
     logout_btn.click(
         fn=do_logout,

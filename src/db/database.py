@@ -51,10 +51,34 @@ def _migrate_add_applicant_email():
     except Exception as e:
         print(f"[MIGRATION WARNING] {e}")
 
+def _migrate_add_chat_history():
+    """创建 chat_history 表（如果不存在）"""
+    try:
+        from src.db.models import ChatHistory
+        inspector = inspect(engine)
+        if 'chat_history' not in inspector.get_table_names():
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE chat_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        user_id VARCHAR(32) NOT NULL,
+                        role VARCHAR(20) NOT NULL,
+                        content TEXT NOT NULL,
+                        reimbursement_id INTEGER NULL,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.execute(text("CREATE INDEX idx_chat_user_id ON chat_history(user_id)"))
+                conn.execute(text("CREATE INDEX idx_chat_created_at ON chat_history(created_at)"))
+                conn.commit()
+            print("[MIGRATION] Created chat_history table")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] chat_history migration failed: {e}")
 
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
     _migrate_add_invoice_details()
     _migrate_add_applicant_email()
+    _migrate_add_chat_history()
     print("Database initialized successfully")
