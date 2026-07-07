@@ -88,23 +88,24 @@ def _render_jump_buttons(text: str) -> str:
 # ===================== 认证 =====================
 
 def _tab_visibility_js(show_manager_tabs: bool) -> str:
-    """生成控制预算看板和模拟审批Tab显隐的JS，通过img onerror注入执行"""
+    """控制预算看板和模拟审批 Tab 的显隐"""
     display = "" if show_manager_tabs else "none"
     return (
         f'<img width="0" height="0" style="display:none" src="" onerror="'
-        f"setTimeout(()=>{{"
-        f"document.querySelectorAll('button[role=tab]').forEach(b=>{{"
-        f"const t=b.textContent.trim();"
-        f"if(t==='预算看板'||t==='模拟审批'){{b.style.display='{display}';}}"
+        f"setTimeout(() => {{"
+        f"document.querySelectorAll('button[role=tab]').forEach(b => {{"
+        f"  const t = b.textContent.trim();"
+        f"  if (t === '预算看板' || t === '模拟审批') {{"
+        f"    b.style.display = '{display}';"
+        f"  }}"
         f"}});"
-        f"if('{display}'==='none'){{"
-        f"const c=[...document.querySelectorAll('button[role=tab]')].find(b=>b.textContent.trim()==='对话报销');"
-        f"if(c)c.click();"
+        f"if ('{display}' === 'none') {{"
+        f"  const chatTab = [...document.querySelectorAll('button[role=tab]')].find(b => b.textContent.trim() === '对话报销');"
+        f"  if (chatTab) chatTab.click();"
         f"}}"
-        f"}},300);"
+        f"}}, 150);"   # 稍长一点延迟，避免冲突
         f'">'
     )
-
 
 def do_login(username, password):
     user = authenticate_user(username, password)
@@ -112,37 +113,54 @@ def do_login(username, password):
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[user["role"]]
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
         is_manager = user["role"] in ("manager", "admin")
-        
-        # 加载历史对话
         history = load_chat_history(user['user_id'], limit=10)
         
         return (
-            user,
-            gr.Column(visible=False),
-            gr.Column(visible=True),
-            info,
-            gr.Tabs(selected=TAB_CHAT),
-            _tab_visibility_js(is_manager),
-            history,  # 加载历史到 chatbot
+            user, gr.Column(visible=False), gr.Column(visible=True), info,
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), history, user
         )
     return (
-        None,
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        "用户名或密码错误",
-        gr.Tabs(selected=TAB_CHAT),
-        _tab_visibility_js(False),
-        [],  # 空历史
+        None, gr.Column(visible=True), gr.Column(visible=False), "用户名或密码错误",
+        gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(False), [], None
     )
 
 def do_logout(user_state):
+    """退出登录 - 重点清除 BrowserState"""
     return (
-        None,
-        gr.Column(visible=True),
-        gr.Column(visible=False),
-        "",
-        gr.Tabs(selected=TAB_CHAT),
-        _tab_visibility_js(False),
+        None, 
+        gr.Column(visible=True), 
+        gr.Column(visible=False), 
+        "", 
+        gr.Tabs(selected=TAB_CHAT), 
+        _tab_visibility_js(False), 
+        [], 
+        None   # ← 必须是 None，清除 localStorage
+    )
+
+def restore_from_storage(stored_user):
+    """从 BrowserState 恢复"""
+    if stored_user and isinstance(stored_user, dict) and stored_user.get('user_id'):
+        # 已登录逻辑（保持不变）
+        role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[stored_user["role"]]
+        info = f"当前用户：**{stored_user['name']}** ({stored_user['user_id']}) | 角色：{role_text} | 部门：{stored_user['department_id'] or '无'}"
+        is_manager = stored_user["role"] in ("manager", "admin")
+        history = load_chat_history(stored_user['user_id'], limit=10)
+        
+        return (
+            stored_user, gr.Column(visible=False), gr.Column(visible=True), info,
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), history, stored_user
+        )
+    
+    # 未登录 - 强制清除
+    return (
+        None, 
+        gr.Column(visible=True), 
+        gr.Column(visible=False), 
+        "", 
+        gr.Tabs(selected=TAB_CHAT), 
+        _tab_visibility_js(False), 
+        [], 
+        None
     )
 
 
@@ -183,7 +201,6 @@ def load_chat_history(user_id: str, limit: int = 10) -> list:
             .limit(limit)\
             .all()
         
-        # 按时间正序返回
         history = []
         for record in reversed(records):
             history.append({
@@ -194,15 +211,11 @@ def load_chat_history(user_id: str, limit: int = 10) -> list:
     finally:
         db.close()
 
+
 def chat_send(message, chat_history, file_uploads, user_state):
     """
-    流式输出 + 持久化存储：
-    1. 用户消息立即显示
-    2. AI显示"正在思考..."
-    3. Agent逐块流式输出
-    4. 对话记录持久化到数据库
+    流式输出 + 持久化存储
     """
-
     print(f"🔍 ===== chat_send 被调用 =====")
     print(f"🔍 agent_available = {agent_available}")
     print(f"🔍 message = {message}")
@@ -213,20 +226,17 @@ def chat_send(message, chat_history, file_uploads, user_state):
 
     chat_history = chat_history or []
 
-    # ========= 构造增强消息（发送给Agent）=========
+    # ========= 构造增强消息 =========
     enhanced_message = message
 
     try:
         if file_uploads:
             files = file_uploads if isinstance(file_uploads, list) else [file_uploads]
-
             file_info = []
-
             for f in files:
                 if f:
                     fp = f.name if hasattr(f, "name") else str(f)
                     file_info.append(f"[附件: {os.path.basename(fp)}]")
-
             if file_info:
                 enhanced_message += "\n\n" + "\n".join(file_info)
 
@@ -237,51 +247,32 @@ def chat_send(message, chat_history, file_uploads, user_state):
             )
 
     except Exception as e:
-        chat_history.append(
-            {
-                "role": "assistant",
-                "content": f"准备消息失败：{e}"
-            }
-        )
+        chat_history.append({"role": "assistant", "content": f"准备消息失败：{e}"})
         yield "", chat_history
         return
 
     # ========= 第一步：立即显示用户消息 =========
-    chat_history.append(
-        {
-            "role": "user",
-            "content": message
-        }
-    )
+    chat_history.append({"role": "user", "content": message})
 
     # ========= 第二步：显示"请稍等..." =========
-    chat_history.append(
-        {
-            "role": "assistant",
-            "content": "请稍等..."
-        }
-    )
-
-    # 立即刷新界面，显示用户消息和"请稍等..."
+    chat_history.append({"role": "assistant", "content": "请稍等..."})
     yield "", chat_history
     print("✅ 已显示 '请稍等...'")
 
     # ========= 第三步：流式执行Agent =========
+    full_response = ""
     try:
         if agent_available:
             print("🚀 开始流式执行 Agent...")
-            full_response = ""
             chat_history[-1]["content"] = ""
             
-            chunk_count = 0
             for chunk in agent_run(enhanced_message, chat_history[:-1]):
-                chunk_count += 1
                 if chunk:
                     full_response += chunk
                     chat_history[-1]["content"] = full_response
                     yield "", chat_history
             
-            print(f"✅ 流式完成，共 {chunk_count} 个 chunks，总长度 {len(full_response)}")
+            print(f"✅ 流式完成，总长度 {len(full_response)}")
 
             # 将 [[Tab名称]] 替换为可点击的 HTML 按钮
             if chat_history and chat_history[-1]["role"] == "assistant":
@@ -307,17 +298,13 @@ def chat_send(message, chat_history, file_uploads, user_state):
     # ========= 第四步：持久化存储 =========
     if user_state and user_state.get('user_id'):
         user_id = user_state['user_id']
-        
-        # 保存用户消息
         save_chat_message(user_id, "user", message)
-        
-        # 保存助手消息（完整响应）
         if full_response:
             save_chat_message(user_id, "assistant", full_response)
         else:
             save_chat_message(user_id, "assistant", "无回复")
-        
         print(f"💾 对话已保存，用户: {user_id}")
+
 
 def ocr_file_handler(file, chat_history, user_state):
     if not file:
@@ -449,11 +436,8 @@ def load_my_reimbursements(user_state):
 def on_reimb_select(evt: gr.SelectData, user_state):
     if not evt.value:
         return ""
-    # evt.value 是单元格的值，需要提取报销单号
-    # 从选中的行获取报销单号
     try:
         selected_value = str(evt.value)
-        # 尝试匹配报销单号格式 RB20XXXXXX
         match = re.match(r'RB\d{8}', selected_value)
         if match:
             return query_reimbursement_progress.func(match.group())
@@ -573,9 +557,15 @@ def do_register(username, password, name, email, department_id, role):
 
 with gr.Blocks(title="企业财务报销助手") as demo:
     user_state = gr.State(None)
+    
+    # ========== BrowserState 持久化存储 ==========
+    user_storage = gr.BrowserState(
+        storage_key="expense_user_data",
+        # secret="your-secret-key-2026"
+    )
 
     # ========== 登录区域 ==========
-    with gr.Column(visible=True, elem_classes=["login-area"]) as login_area:
+    with gr.Column(visible=False, elem_classes=["login-area"]) as login_area:
         gr.Markdown("# 企业财务报销助手")
         gr.Markdown("请登录以使用系统")
         login_username = gr.Textbox(label="用户名", placeholder="如 zhangsan / sunjl / admin")
@@ -603,7 +593,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             reg_msg = gr.Markdown("")
 
     # ========== 主功能区域 ==========
-    with gr.Column(visible=False) as main_area:
+    with gr.Column(visible=True) as main_area:
         user_info_bar = gr.Markdown("", elem_classes=["user-bar"])
         logout_btn = gr.Button("退出登录", size="sm")
         tab_js_injector = gr.HTML(elem_classes=["tab-js-injector"])
@@ -613,7 +603,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             # ========== Tab 1: 对话报销 ==========
             with gr.Tab(label="对话报销", id=TAB_CHAT):
                 with gr.Row():
-                    # 左列：文件上传 + 操作
                     with gr.Column(scale=1):
                         gr.Markdown("### 票据上传")
                         file_input = gr.File(
@@ -640,13 +629,12 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                             inputs=[gr.Textbox(visible=False)],
                         )
 
-                    # 右列：对话区
                     with gr.Column(scale=2):
                         chatbot_display = gr.Chatbot(
                             height=450,
                             label="报销助手对话",
                             sanitize_html=False
-                            )
+                        )
                         with gr.Row():
                             msg_input = gr.Textbox(
                                 placeholder="描述您的报销需求...",
@@ -719,7 +707,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
 
                 progress_detail = gr.Textbox(label="报销详情 / 审批链路", lines=12, interactive=False)
 
-                # 事件绑定
                 my_reimb_df.select(fn=on_reimb_select, inputs=user_state, outputs=progress_detail)
                 refresh_my_btn.click(fn=load_my_reimbursements, inputs=user_state, outputs=my_reimb_df)
                 query_single_btn.click(fn=query_progress_ui, inputs=reimbursement_no_input, outputs=progress_detail)
@@ -757,7 +744,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                     jump_progress_from_approval = gr.Button("查进度 >>")
                     jump_chat_from_approval = gr.Button("新建报销 >>")
 
-                # 事件绑定
                 pending_df.select(fn=on_pending_select, outputs=[selected_no_display, approval_chain])
                 refresh_pending_btn.click(fn=load_pending_for_approver, inputs=user_state, outputs=pending_df)
                 submit_approve_btn.click(
@@ -774,19 +760,48 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     login_btn.click(
         fn=do_login,
         inputs=[login_username, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
     )
     login_password.submit(
         fn=do_login,
         inputs=[login_username, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
     )
     logout_btn.click(
         fn=do_logout,
         inputs=user_state,
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage],
+        js="""
+        () => {
+            try {
+                localStorage.removeItem('expense_user_data');
+                console.log('✅ localStorage 已清除');
+            } catch(e) {}
+            setTimeout(() => {
+                document.querySelectorAll('.login-area').forEach(el => { if(el) el.style.display = 'block'; });
+                document.querySelectorAll('.main').forEach(el => { if(el) el.style.display = 'none'; });
+            }, 100);
+        }
+        """
     )
     reg_btn.click(fn=do_register, inputs=[reg_username, reg_password, reg_name, reg_email, reg_dept, reg_role], outputs=reg_msg)
+
+
+    # ========== 页面加载时从 BrowserState 恢复登录 ==========
+    demo.load(
+        fn=restore_from_storage,
+        inputs=[user_storage],
+        outputs=[
+            user_state, 
+            login_area, 
+            main_area, 
+            user_info_bar, 
+            tabs_container, 
+            tab_js_injector, 
+            chatbot_display,
+            user_storage   # ← 必须包含这一项
+        ]
+    )
 
 
 if __name__ == "__main__":
