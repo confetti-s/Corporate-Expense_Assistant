@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from src.db.models import Reimbursements, DepartmentBudget, ApprovalRecords, User, DepartmentApprover
+from src.db.models import Reimbursements, DepartmentBudget, ApprovalRecords, User, DepartmentApprover, Invoice
 from src.db.auth import hash_password
 from datetime import datetime, timedelta
 import random
@@ -155,6 +155,8 @@ def seed_reimbursements(db: Session):
         amount = round(random.uniform(100, 5000), 2)
         status = random.choice(statuses)
         created_date = datetime.now() - timedelta(days=random.randint(1, 30))
+        inv_type = random.choice(["增值税发票", "出租车票", "火车票"])
+        inv_code = f"INV{random.randint(10000,99999)}"
 
         reimbursement = Reimbursements(
             reimbursement_no=f"RB{datetime.now().year}{str(i+1).zfill(4)}",
@@ -167,9 +169,9 @@ def seed_reimbursements(db: Session):
             status=status,
             need_special_approval=amount > 3000,
             invoice_details=json.dumps([{
-                "type_name": random.choice(["增值税发票", "出租车票", "火车票"]),
+                "type_name": inv_type,
                 "amount": amount,
-                "invoice_code": f"INV{random.randint(10000,99999)}",
+                "invoice_code": inv_code,
                 "seller_name": "示例销售方"
             }], ensure_ascii=False),
             applicant_email=emp_emails.get(emp_id),
@@ -177,6 +179,27 @@ def seed_reimbursements(db: Session):
             updated_at=created_date
         )
         db.add(reimbursement)
+        db.flush()  # 获取reimbursement.id
+
+        # 同时创建Invoice记录并关联
+        db.add(Invoice(
+            invoice_code=inv_code,
+            invoice_number=f"NUM{random.randint(100000,999999)}",
+            invoice_type="vat_invoice" if inv_type == "增值税发票" else "taxi_receipt",
+            invoice_type_name=inv_type,
+            amount=amount,
+            invoice_date=created_date.strftime("%Y年%m月%d日"),
+            seller_name="示例销售方",
+            seller_tax_id="91110000MA01ABCD",
+            buyer_name="示例公司",
+            buyer_tax_id="91110000MA01EFGH",
+            confidence="0.9500",
+            uploaded_by=emp_id,
+            reimbursement_id=reimbursement.id,
+            reimbursement_no=reimbursement.reimbursement_no,
+            created_at=created_date,
+            updated_at=created_date,
+        ))
     db.commit()
     print("Reimbursement data seeded")
 

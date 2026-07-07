@@ -2,7 +2,10 @@ from langchain.tools import tool
 import requests
 import base64
 import json
+import os
 from config import BAIDU_OCR_API_KEY, BAIDU_OCR_SECRET_KEY, BAIDU_OCR_TOKEN_URL, BAIDU_OCR_API_URL
+from src.db.database import SessionLocal
+from src.db.models import Invoice
 
 _access_token = None
 _token_expire_time = 0
@@ -71,6 +74,37 @@ def _extract_field(result_dict, key, default=""):
     return default
 
 
+def _save_invoice_to_db(invoice_data, file_path="", uploaded_by=""):
+    """将OCR识别的发票数据存入Invoice表，返回invoice_id"""
+    db = SessionLocal()
+    try:
+        record = Invoice(
+            invoice_code=invoice_data.get("invoice_code", ""),
+            invoice_number=invoice_data.get("invoice_number", ""),
+            invoice_type=invoice_data.get("type", ""),
+            invoice_type_name=invoice_data.get("type_name", ""),
+            amount=invoice_data.get("amount", 0.0),
+            invoice_date=invoice_data.get("invoice_date", ""),
+            seller_name=invoice_data.get("seller_name", ""),
+            seller_tax_id=invoice_data.get("seller_tax_id", ""),
+            buyer_name=invoice_data.get("buyer_name", ""),
+            buyer_tax_id=invoice_data.get("buyer_tax_id", ""),
+            confidence=invoice_data.get("probability", ""),
+            file_path=file_path,
+            uploaded_by=uploaded_by or None,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record.id
+    except Exception as e:
+        db.rollback()
+        print(f"[Invoice保存失败] {e}")
+        return None
+    finally:
+        db.close()
+
+
 def parse_invoice_result(result):
     invoice_type = result.get("type", "others")
     type_name = INVOICE_TYPE_MAP.get(invoice_type, "未知票据")
@@ -119,11 +153,12 @@ def parse_invoice_result(result):
     }
 
 @tool("票据OCR识别")
-def ocr_invoice(file_path: str) -> str:
+def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
     """
-    使用百度智能云识别票据图片或PDF中的发票信息
+    使用百度智能云识别票据图片或PDF中的发票信息，识别结果自动存入发票表
     :param file_path: 文件路径，支持图片（jpg/jpeg/png/bmp）和PDF格式
-    :return: 结构化的发票信息字符串
+    :param uploaded_by: 上传人用户ID（可选，如E001）
+    :return: 结构化的发票信息字符串（含发票记录ID，用于后续创建报销单时关联）
     """
     if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
         return "错误：百度OCR API密钥未配置，请在.env文件中设置BAIDU_OCR_API_KEY和BAIDU_OCR_SECRET_KEY"
@@ -151,7 +186,12 @@ def ocr_invoice(file_path: str) -> str:
         
         if result.get("words_result_num", 0) > 0:
             invoice_data = parse_invoice_result(result["words_result"][0])
-            
+
+            # 存入Invoice表
+            invoice_id = _save_invoice_to_db(invoice_data, file_path=file_path, uploaded_by=uploaded_by)
+
+            id_hint = f"\n发票记录ID：{invoice_id}" if invoice_id else ""
+
             return f"""票据识别结果：
 票据类型：{invoice_data['type_name']}
 置信度：{invoice_data['probability']}
@@ -162,7 +202,7 @@ def ocr_invoice(file_path: str) -> str:
 销售方名称：{invoice_data['seller_name']}
 销售方税号：{invoice_data['seller_tax_id']}
 购买方名称：{invoice_data['buyer_name']}
-购买方税号：{invoice_data['buyer_tax_id']}"""
+购买方税号：{invoice_data['buyer_tax_id']}{id_hint}"""
         else:
             return "识别结果为空，未检测到票据"
             
@@ -170,11 +210,12 @@ def ocr_invoice(file_path: str) -> str:
         return f"票据识别失败：{str(e)}"
 
 @tool("批量票据识别")
-def batch_ocr_invoices(file_paths: str) -> str:
+def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
     """
-    批量识别多张票据
+    批量识别多张票据，识别结果自动存入发票表
     :param file_paths: 文件路径列表，用逗号分隔
-    :return: 所有票据的识别结果字符串
+    :param uploaded_by: 上传人用户ID（可选，如E001）
+    :return: 所有票据的识别结果字符串（含发票记录ID）
     """
     if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
         return "错误：百度OCR API密钥未配置，请在.env文件中设置BAIDU_OCR_API_KEY和BAIDU_OCR_SECRET_KEY"
@@ -197,50 +238,72 @@ def batch_ocr_invoices(file_paths: str) -> str:
             
             if result.get("words_result_num", 0) > 0:
                 invoice_data = parse_invoice_result(result["words_result"][0])
+                inv_id = _save_invoice_to_db(invoice_data, file_path=file_path, uploaded_by=uploaded_by)
                 results.append({
-                    "file": file_path,
+                    "file": os.path.basename(file_path),
                     "type_name": invoice_data["type_name"],
+                    "probability": invoice_data["probability"],
                     "amount": invoice_data["amount"],
                     "invoice_code": invoice_data["invoice_code"],
                     "invoice_number": invoice_data["invoice_number"],
                     "invoice_date": invoice_data["invoice_date"],
-                    "seller_name": invoice_data["seller_name"]
+                    "seller_name": invoice_data["seller_name"],
+                    "seller_tax_id": invoice_data["seller_tax_id"],
+                    "buyer_name": invoice_data["buyer_name"],
+                    "buyer_tax_id": invoice_data["buyer_tax_id"],
+                    "invoice_id": inv_id
                 })
             else:
                 results.append({
-                    "file": file_path,
+                    "file": os.path.basename(file_path),
                     "type_name": "未识别",
+                    "probability": "",
                     "amount": 0.0,
                     "invoice_code": "",
                     "invoice_number": "",
                     "invoice_date": "",
-                    "seller_name": ""
+                    "seller_name": "",
+                    "seller_tax_id": "",
+                    "buyer_name": "",
+                    "buyer_tax_id": ""
                 })
         except Exception as e:
             results.append({
-                "file": file_path,
+                "file": os.path.basename(file_path),
                 "type_name": f"识别失败: {str(e)}",
+                "probability": "",
                 "amount": 0.0,
                 "invoice_code": "",
                 "invoice_number": "",
                 "invoice_date": "",
-                "seller_name": ""
+                "seller_name": "",
+                "seller_tax_id": "",
+                "buyer_name": "",
+                "buyer_tax_id": ""
             })
     
     total_amount = sum(r["amount"] for r in results)
     
     result_str = f"批量识别结果（共 {len(results)} 张票据）：\n\n"
     for i, r in enumerate(results):
-        result_str += f"""票据 {i + 1}：
-文件：{r['file']}
-类型：{r['type_name']}
-金额：{r['amount']:,.2f} 元
-发票代码：{r['invoice_code']}
-发票号码：{r['invoice_number']}
-开票日期：{r['invoice_date']}
-销售方：{r['seller_name']}
-------------------------
+        id_hint = f"| 发票记录ID | {r['invoice_id']} |\n" if r.get('invoice_id') else ""
+        result_str += f"""**票据 {i + 1}**
+
+| 项目 | 内容 |
+|------|------|
+| 文件 | {r['file']} |
+| 票据类型 | {r['type_name']} |
+| 置信度 | {r['probability']} |
+| 发票代码 | {r['invoice_code']} |
+| 发票号码 | {r['invoice_number']} |
+| 金额 | {r['amount']:,.2f} 元 |
+| 开票日期 | {r['invoice_date']} |
+| 销售方名称 | {r['seller_name']} |
+| 销售方税号 | {r['seller_tax_id']} |
+| 购买方名称 | {r['buyer_name']} |
+| 购买方税号 | {r['buyer_tax_id']} |
+{id_hint}
 """
-    result_str += f"\n总金额：{total_amount:,.2f} 元"
+    result_str += f"**总金额：{total_amount:,.2f} 元**"
     
     return result_str

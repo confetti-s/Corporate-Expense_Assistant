@@ -50,6 +50,33 @@ class Reimbursements(Base):
 
     department = relationship('DepartmentBudget', back_populates='reimbursements')
     approval_records = relationship('ApprovalRecords', back_populates='reimbursement', cascade='all, delete-orphan')
+    invoices = relationship('Invoice', back_populates='reimbursement')
+
+
+class Invoice(Base):
+    __tablename__ = 'invoices'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    invoice_code = Column(String(50))
+    invoice_number = Column(String(50))
+    invoice_type = Column(String(50))
+    invoice_type_name = Column(String(50))
+    amount = Column(Float, default=0.0)
+    invoice_date = Column(String(20))
+    seller_name = Column(String(200))
+    seller_tax_id = Column(String(50))
+    buyer_name = Column(String(200))
+    buyer_tax_id = Column(String(50))
+    confidence = Column(String(20))
+    file_path = Column(String(500))
+    uploaded_by = Column(String(32), ForeignKey('users.user_id'))
+    reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
+    reimbursement_no = Column(String(32), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    uploader = relationship('User')
+    reimbursement = relationship('Reimbursements', back_populates='invoices')
 
 
 class DepartmentBudget(Base):

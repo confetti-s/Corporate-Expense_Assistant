@@ -1,6 +1,6 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
-from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User
+from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User, Invoice
 from datetime import datetime
 
 
@@ -13,7 +13,8 @@ def create_reimbursement(
     total_amount: float,
     description: str = "",
     invoice_details_json: str = "[]",
-    applicant_email: str = ""
+    applicant_email: str = "",
+    invoice_ids: str = ""
 ) -> str:
     """
     创建一条新的报销记录并存入数据库，返回报销单号
@@ -25,9 +26,18 @@ def create_reimbursement(
     :param description: 报销说明（可选）
     :param invoice_details_json: 发票OCR结果的JSON数组字符串（可选）
     :param applicant_email: 申请人邮箱（可选，用于审批通知）
+    :param invoice_ids: 发票记录ID列表，用逗号分隔（可选，如"1,2,3"，关联Invoice表中的发票）
     """
     db = SessionLocal()
     try:
+        # 发票重复报销校验
+        if invoice_ids:
+            id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
+            for inv_id in id_list:
+                inv = db.query(Invoice).filter_by(id=inv_id).first()
+                if inv and inv.reimbursement_id is not None:
+                    return f"错误：发票记录ID {inv_id}（{inv.invoice_type_name}，{inv.amount:,.2f}元）已关联报销单 {inv.reimbursement_no}，不可重复报销"
+
         year = datetime.now().strftime("%Y")
         last_record = db.query(Reimbursements).filter(
             Reimbursements.reimbursement_no.like(f"RB{year}%")
@@ -67,8 +77,22 @@ def create_reimbursement(
         )
         db.add(record)
         db.commit()
+        db.refresh(record)
+
+        # 关联发票记录
+        linked_count = 0
+        if invoice_ids:
+            id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
+            for inv_id in id_list:
+                inv = db.query(Invoice).filter_by(id=inv_id).first()
+                if inv:
+                    inv.reimbursement_id = record.id
+                    inv.reimbursement_no = reimbursement_no
+                    linked_count += 1
+            db.commit()
 
         special_note = "（需特殊审批）" if need_special_approval else ""
+        invoice_note = f"\n已关联 {linked_count} 张发票记录" if linked_count > 0 else ""
         return (
             f"报销单创建成功！\n"
             f"报销单号：{reimbursement_no}\n"
@@ -76,7 +100,7 @@ def create_reimbursement(
             f"部门：{department_id}\n"
             f"费用类型：{expense_type}\n"
             f"金额：{total_amount:,.2f} 元{special_note}\n"
-            f"状态：草稿\n"
+            f"状态：草稿{invoice_note}\n"
             f"请记住报销单号 {reimbursement_no}，接下来需要提交审批。\n"
             f"[[进度查询]]"
         )

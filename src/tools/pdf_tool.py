@@ -10,6 +10,8 @@ from datetime import datetime
 import json
 import os
 from config import OUTPUTS_DIR
+from src.db.database import SessionLocal
+from src.db.models import Invoice
 
 # 注册中文字体
 _FONT_REGISTERED = False
@@ -101,11 +103,30 @@ def generate_reimbursement_pdf(
     elements.append(t)
     elements.append(Spacer(1, 15))
 
-    # 发票明细
+    # 发票明细：优先从Invoice表读取，降级用invoice_details_json
+    invoices = []
     try:
-        invoices = json.loads(invoice_details_json) if invoice_details_json else []
-    except (json.JSONDecodeError, TypeError):
-        invoices = []
+        db = SessionLocal()
+        db_invoices = db.query(Invoice).filter_by(reimbursement_no=reimbursement_no).all()
+        if db_invoices:
+            invoices = [
+                {
+                    "type_name": inv.invoice_type_name or "-",
+                    "amount": inv.amount or 0,
+                    "invoice_code": inv.invoice_code or "-",
+                    "seller_name": inv.seller_name or "-",
+                }
+                for inv in db_invoices
+            ]
+        db.close()
+    except Exception:
+        pass
+
+    if not invoices:
+        try:
+            invoices = json.loads(invoice_details_json) if invoice_details_json else []
+        except (json.JSONDecodeError, TypeError):
+            invoices = []
 
     if invoices:
         elements.append(Paragraph("发票明细", heading_style))

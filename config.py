@@ -5,7 +5,7 @@ load_dotenv()
 
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 WORKSPACE_ID = os.getenv("WORKSPACE_ID")
-MODEL_NAME = os.getenv("MODEL_NAME", "qwen3.7-plus")
+MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-v4-flash")
 
 BAIDU_OCR_API_KEY = os.getenv("BAIDU_OCR_API_KEY")
 BAIDU_OCR_SECRET_KEY = os.getenv("BAIDU_OCR_SECRET_KEY")

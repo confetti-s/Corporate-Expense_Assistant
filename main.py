@@ -286,7 +286,7 @@ def chat_send(message, chat_history, file_uploads, user_state):
         
         print(f"💾 对话已保存，用户: {user_id}")
 
-def ocr_file_handler(file, chat_history):
+def ocr_file_handler(file, chat_history, user_state):
     if not file:
         return chat_history or [], None
 
@@ -298,13 +298,15 @@ def ocr_file_handler(file, chat_history):
                 fp = f.name if hasattr(f, 'name') else str(f)
                 paths.append(fp)
 
+        user_id = user_state['user_id'] if user_state else ""
+
         if len(paths) == 0:
             return chat_history or [], None
         elif len(paths) == 1:
-            result = ocr_invoice.func(paths[0])
+            result = ocr_invoice.func(paths[0], uploaded_by=user_id)
             filename = os.path.basename(paths[0])
         else:
-            result = batch_ocr_invoices.func(",".join(paths))
+            result = batch_ocr_invoices.func(",".join(paths), uploaded_by=user_id)
             filename = f"{len(paths)}个文件"
     except Exception as e:
         filename = "文件"
@@ -620,7 +622,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                 )
                 ocr_btn.click(
                     fn=ocr_file_handler,
-                    inputs=[file_input, chatbot_display],
+                    inputs=[file_input, chatbot_display, user_state],
                     outputs=[chatbot_display, file_input]
                 )
                 clear_btn.click(
