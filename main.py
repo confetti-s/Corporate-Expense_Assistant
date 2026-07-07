@@ -479,20 +479,26 @@ def query_by_date_range(start_date, end_date, user_state):
 
 def load_pending_for_approver(user_state):
     if not user_state or user_state['role'] not in ('manager', 'admin'):
-        return pd.DataFrame(columns=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别"])
+        return pd.DataFrame(columns=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别", "审批状态"])
 
     db = SessionLocal()
     try:
-        pending_approvals = db.query(ApprovalRecords).filter_by(
-            approver_id=user_state['user_id'],
-            status="pending"
-        ).all()
+        all_approvals = db.query(ApprovalRecords).filter_by(
+            approver_id=user_state['user_id']
+        ).order_by(ApprovalRecords.id.desc()).all()
 
         data = []
-        for rec in pending_approvals:
+        for rec in all_approvals:
             reimb = db.query(Reimbursements).filter_by(id=rec.reimbursement_id).first()
-            if reimb and reimb.status in ("pending", "reviewing"):
-                # 校验前置级别是否已通过
+            if not reimb:
+                continue
+
+            dept_name = reimb.department_id
+            dept = db.query(DepartmentBudget).filter_by(department_id=reimb.department_id).first()
+            if dept:
+                dept_name = dept.department_name
+
+            if rec.status == "pending":
                 if rec.approval_level > 1:
                     prev_ok = all(
                         db.query(ApprovalRecords).filter_by(
@@ -506,23 +512,29 @@ def load_pending_for_approver(user_state):
                         ).first()
                     )
                     if not prev_ok:
-                        continue
+                        approval_status = "等待前级审批"
+                    else:
+                        approval_status = "待审批"
+                else:
+                    approval_status = "待审批"
+            elif rec.status == "approved":
+                approval_status = "已通过"
+            elif rec.status == "rejected":
+                approval_status = "已驳回"
+            else:
+                approval_status = rec.status
 
-                dept_name = reimb.department_id
-                dept = db.query(DepartmentBudget).filter_by(department_id=reimb.department_id).first()
-                if dept:
-                    dept_name = dept.department_name
+            data.append([
+                reimb.reimbursement_no,
+                reimb.employee_name,
+                dept_name,
+                f"{reimb.total_amount:,.2f}",
+                reimb.expense_type,
+                f"L{rec.approval_level}",
+                approval_status,
+            ])
 
-                data.append([
-                    reimb.reimbursement_no,
-                    reimb.employee_name,
-                    dept_name,
-                    f"{reimb.total_amount:,.2f}",
-                    reimb.expense_type,
-                    f"L{rec.approval_level}",
-                ])
-
-        return pd.DataFrame(data, columns=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别"])
+        return pd.DataFrame(data, columns=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别", "审批状态"])
     finally:
         db.close()
 
@@ -717,11 +729,11 @@ with gr.Blocks(title="企业财务报销助手") as demo:
 
             # ========== Tab 4: 模拟审批 ==========
             with gr.Tab(label="模拟审批", id=TAB_APPROVAL) as approval_tab:
-                gr.Markdown("## 我的待审批列表")
+                gr.Markdown("## 我的审批列表")
 
                 pending_df = gr.Dataframe(
-                    headers=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别"],
-                    datatype=["str", "str", "str", "str", "str", "str"],
+                    headers=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别", "审批状态"],
+                    datatype=["str", "str", "str", "str", "str", "str", "str"],
                     interactive=False,
                     max_height=280,
                     label="点击行选中报销单",
