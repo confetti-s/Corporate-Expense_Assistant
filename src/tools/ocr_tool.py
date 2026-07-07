@@ -152,6 +152,39 @@ def parse_invoice_result(result):
         "probability": probability
     }
 
+def _is_pdf(file_path: str) -> bool:
+    return file_path.lower().endswith('.pdf')
+
+
+def _encode_file(file_path: str) -> bytes:
+    """读取文件并base64编码（支持图片和PDF）"""
+    with open(file_path, "rb") as f:
+        return base64.b64encode(f.read())
+
+
+def _call_ocr_api(file_path: str) -> dict:
+    """调用百度OCR multiple_invoice API，自动区分图片和PDF"""
+    access_token = get_access_token()
+    encoded_data = _encode_file(file_path)
+    url = f"{BAIDU_OCR_API_URL}?access_token={access_token}"
+
+    if _is_pdf(file_path):
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        data = {"pdf_file": encoded_data.decode("utf-8")}
+        data["pdf_file_num"] = "1"
+    else:
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        data = {"image": encoded_data.decode("utf-8")}
+
+    data["verify_parameter"] = "false"
+    data["probability"] = "true"
+    data["location"] = "false"
+
+    response = requests.post(url, headers=headers, data=data)
+    response.raise_for_status()
+    return response.json()
+
+
 @tool("票据OCR识别")
 def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
     """
@@ -162,28 +195,10 @@ def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
     """
     if not BAIDU_OCR_API_KEY or not BAIDU_OCR_SECRET_KEY:
         return "错误：百度OCR API密钥未配置，请在.env文件中设置BAIDU_OCR_API_KEY和BAIDU_OCR_SECRET_KEY"
-    
+
     try:
-        access_token = get_access_token()
-        encoded_image = encode_image(file_path)
-        
-        url = f"{BAIDU_OCR_API_URL}?access_token={access_token}"
-        
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        
-        data = {
-            "image": encoded_image,
-            "verify_parameter": "false",
-            "probability": "true",
-            "location": "false"
-        }
-        
-        response = requests.post(url, headers=headers, data=data)
-        response.raise_for_status()
-        result = response.json()
-        
+        result = _call_ocr_api(file_path)
+
         if result.get("words_result_num", 0) > 0:
             invoice_data = parse_invoice_result(result["words_result"][0])
 
@@ -225,16 +240,7 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
     
     for file_path in files:
         try:
-            access_token = get_access_token()
-            encoded_image = encode_image(file_path)
-            
-            url = f"{BAIDU_OCR_API_URL}?access_token={access_token}"
-            headers = {"Content-Type": "application/x-www-form-urlencoded"}
-            data = {"image": encoded_image}
-            
-            response = requests.post(url, headers=headers, data=data)
-            response.raise_for_status()
-            result = response.json()
+            result = _call_ocr_api(file_path)
             
             if result.get("words_result_num", 0) > 0:
                 invoice_data = parse_invoice_result(result["words_result"][0])
