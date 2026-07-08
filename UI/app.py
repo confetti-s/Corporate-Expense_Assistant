@@ -13,7 +13,7 @@ seed_main()
 from UI.constants import CUSTOM_CSS, TAB_CHAT, TAB_BUDGET, TAB_PROGRESS, TAB_APPROVAL
 from UI.chat_page import (
     agent_available, chat_send, ocr_file_handler, clear_chat,
-    load_full_chat_history
+    load_full_chat_history, send_greeting
 )
 from UI.budget_page import update_budget
 from UI.progress_page import (
@@ -235,11 +235,19 @@ with gr.Blocks(title="企业财务报销助手") as demo:
         fn=do_login,
         inputs=[login_username, login_password],
         outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
+    ).then(
+        fn=send_greeting,
+        inputs=[chatbot_display, user_state],
+        outputs=[chatbot_display]
     )
     login_password.submit(
         fn=do_login,
         inputs=[login_username, login_password],
         outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
+    ).then(
+        fn=send_greeting,
+        inputs=[chatbot_display, user_state],
+        outputs=[chatbot_display]
     )
     logout_btn.click(
         fn=do_logout,
@@ -274,4 +282,8 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             chatbot_display,
             user_storage
         ]
+    ).then(
+        fn=send_greeting,
+        inputs=[chatbot_display, user_state],
+        outputs=[chatbot_display]
     )

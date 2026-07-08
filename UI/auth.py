@@ -2,8 +2,7 @@ import gradio as gr
 
 from src.db.auth import authenticate_user
 from UI.constants import TAB_CHAT
-from UI.utils import _render_jump_buttons, _tab_visibility_js
-from UI.chat_page import _get_greeting, save_chat_message
+from UI.utils import _tab_visibility_js
 
 
 def do_login(username, password):
@@ -13,13 +12,9 @@ def do_login(username, password):
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
         is_manager = user["role"] in ("manager", "admin")
 
-        greeting = _get_greeting(user)
-        chat = [{"role": "assistant", "content": _render_jump_buttons(greeting)}]
-        save_chat_message(user['user_id'], "assistant", greeting)
-
         return (
             user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), chat, user
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], user
         )
     return (
         None, gr.Column(visible=True), gr.Column(visible=False), "用户名或密码错误",
@@ -46,13 +41,9 @@ def restore_from_storage(stored_user):
         info = f"当前用户：**{stored_user['name']}** ({stored_user['user_id']}) | 角色：{role_text} | 部门：{stored_user['department_id'] or '无'}"
         is_manager = stored_user["role"] in ("manager", "admin")
 
-        greeting = _get_greeting(stored_user)
-        chat = [{"role": "assistant", "content": _render_jump_buttons(greeting)}]
-        save_chat_message(stored_user['user_id'], "assistant", greeting)
-
         return (
             stored_user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), chat, stored_user
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], stored_user
         )
 
     return (
