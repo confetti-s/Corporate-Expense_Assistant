@@ -11,10 +11,10 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hash_password(password) == password_hash
 
 
-def authenticate_user(username: str, password: str) -> dict | None:
+def authenticate_user(user_id: str, password: str) -> dict | None:
     db = SessionLocal()
     try:
-        user = db.query(User).filter_by(username=username).first()
+        user = db.query(User).filter_by(user_id=user_id).first()
         if user and verify_password(password, user.password_hash):
             return {
                 "user_id": user.user_id,
