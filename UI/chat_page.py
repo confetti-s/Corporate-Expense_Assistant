@@ -66,10 +66,13 @@ def load_chat_history(user_id: str, limit: int = 10) -> list:
         db.close()
 
 
-def _get_greeting(user_state):
-    """同步调用 Agent 获取问候语"""
-    if not agent_available or not user_state:
-        return "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+def send_greeting(chat_history, user_state):
+    """登录后流式输出智能体问候"""
+    if not user_state:
+        yield chat_history or []
+        return
+
+    chat_history = chat_history or []
 
     enhanced_message = "你好"
     if user_state:
@@ -78,16 +81,36 @@ def _get_greeting(user_state):
             f"部门: {user_state['department_id']}]"
         )
 
+    chat_history.append({"role": "assistant", "content": "请稍等..."})
+    yield chat_history
+
     full_response = ""
     try:
-        for chunk in agent_run(enhanced_message, []):
-            if chunk:
-                full_response += chunk
-    except Exception as e:
-        print(f"获取问候语失败: {e}")
-        return "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+        if agent_available:
+            chat_history[-1]["content"] = ""
+            for chunk in agent_run(enhanced_message, []):
+                if chunk:
+                    full_response += chunk
+                    display_text = re.sub(r'\[\[.*?\]\]', '', full_response).rstrip()
+                    chat_history[-1]["content"] = display_text
+                    yield chat_history
 
-    return full_response or "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+            if chat_history and chat_history[-1]["role"] == "assistant":
+                rendered = _render_jump_buttons(full_response)
+                chat_history[-1]["content"] = rendered
+                yield chat_history
+        else:
+            full_response = "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+            chat_history[-1]["content"] = full_response
+            yield chat_history
+    except Exception as e:
+        print(f"send_greeting 错误: {e}")
+        full_response = "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+        chat_history[-1]["content"] = full_response
+        yield chat_history
+
+    if user_state and user_state.get('user_id'):
+        save_chat_message(user_state['user_id'], "assistant", full_response)
 
 
 def load_full_chat_history(user_state):
