@@ -17,7 +17,8 @@ from UI.chat_page import (
 )
 from UI.budget_page import update_budget
 from UI.progress_page import (
-    load_my_reimbursements, on_reimb_select, query_progress_ui, query_by_date_range
+    load_my_reimbursements, on_reimb_select, query_progress_ui, query_by_date_range,
+    auto_load_on_tab_change
 )
 from UI.approval_page import (
     load_pending_for_approver, on_pending_select, do_approve
@@ -184,8 +185,6 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                 query_single_btn.click(fn=query_progress_ui, inputs=reimbursement_no_input, outputs=progress_detail)
                 query_range_btn.click(fn=query_by_date_range, inputs=[date_start, date_end, user_state], outputs=progress_detail)
 
-                demo.load(fn=load_my_reimbursements, inputs=user_state, outputs=my_reimb_df)
-
             # ========== Tab 4: 模拟审批 ==========
             with gr.Tab(label="模拟审批", id=TAB_APPROVAL) as approval_tab:
                 gr.Markdown("## 我的审批列表")
@@ -226,10 +225,10 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                 jump_progress_from_approval.click(fn=lambda: gr.Tabs(selected=TAB_PROGRESS), outputs=tabs_container)
                 jump_chat_from_approval.click(fn=lambda: gr.Tabs(selected=TAB_CHAT), outputs=tabs_container)
 
-                demo.load(fn=load_pending_for_approver, inputs=user_state, outputs=pending_df)
-
-    # ========== Tab 切换时自动刷新预算数据 ==========
+    # ========== Tab 切换时自动刷新 ==========
     tabs_container.change(fn=update_budget, outputs=[chart_output, budget_text])
+    tabs_container.change(fn=auto_load_on_tab_change, inputs=user_state, outputs=my_reimb_df)
+    tabs_container.change(fn=load_pending_for_approver, inputs=user_state, outputs=pending_df)
 
     # ========== 登录/注册事件 ==========
     login_btn.click(

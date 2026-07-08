@@ -57,3 +57,7 @@ def query_by_date_range(start_date, end_date, user_state):
         return "请输入开始和结束日期（格式：YYYY-MM-DD）"
     emp_id = user_state['user_id'] if user_state else None
     return query_reimbursements_by_date.func(start_date, end_date, emp_id)
+
+
+def auto_load_on_tab_change(user_state):
+    return load_my_reimbursements(user_state)
