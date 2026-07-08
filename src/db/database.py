@@ -51,6 +51,50 @@ def _migrate_add_applicant_email():
     except Exception as e:
         print(f"[MIGRATION WARNING] {e}")
 
+def _migrate_ensure_user_id_unique():
+    """确保 users.user_id 有唯一索引，清理重复数据"""
+    try:
+        inspector = inspect(engine)
+        if 'users' not in inspector.get_table_names():
+            return
+
+        # 先清理重复的 user_id，保留 id 最小的那条
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT user_id, COUNT(*) as cnt
+                FROM users
+                GROUP BY user_id
+                HAVING cnt > 1
+            """))
+            duplicates = result.fetchall()
+            for row in duplicates:
+                dup_user_id = row[0]
+                # 找出这个 user_id 的所有记录，保留 id 最小的，删除其余
+                conn.execute(text("""
+                    DELETE FROM users
+                    WHERE user_id = :uid
+                      AND id NOT IN (
+                          SELECT MIN(id) FROM users WHERE user_id = :uid
+                      )
+                """), {"uid": dup_user_id})
+                conn.commit()
+                print(f"[MIGRATION] Removed duplicate user_id: {dup_user_id}")
+
+        # 确保唯一索引存在
+        with engine.connect() as conn:
+            indexes = inspector.get_indexes('users')
+            has_unique = any(
+                idx.get('unique') and 'user_id' in idx.get('column_names', [])
+                for idx in indexes
+            )
+            if not has_unique:
+                conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_user_id ON users(user_id)"))
+                conn.commit()
+                print("[MIGRATION] Added unique index on users.user_id")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] ensure_user_id_unique: {e}")
+
+
 def _migrate_add_chat_history():
     """创建 chat_history 表（如果不存在）"""
     try:
@@ -78,6 +122,7 @@ def _migrate_add_chat_history():
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
+    _migrate_ensure_user_id_unique()
     _migrate_add_invoice_details()
     _migrate_add_applicant_email()
     _migrate_add_chat_history()

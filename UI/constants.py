@@ -11,4 +11,7 @@ CUSTOM_CSS = """
 .user-bar span { font-size: 15px; }
 .tab-nav button { font-size: 14px !important; }
 .tab-js-injector { height: 0; overflow: hidden; margin: 0; padding: 0; }
+.pending,
+.generating,
+[aria-busy="true"] { border-color: transparent !important; outline: none !important; box-shadow: none !important; }
 """

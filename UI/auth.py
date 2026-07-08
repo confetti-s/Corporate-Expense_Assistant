@@ -6,8 +6,8 @@ from UI.utils import _render_jump_buttons, _tab_visibility_js
 from UI.chat_page import _get_greeting, save_chat_message
 
 
-def do_login(username, password):
-    user = authenticate_user(username, password)
+def do_login(user_id, password):
+    user = authenticate_user(user_id, password)
     if user:
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[user["role"]]
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
@@ -18,11 +18,11 @@ def do_login(username, password):
         save_chat_message(user['user_id'], "assistant", greeting)
 
         return (
-            user, gr.Column(visible=False), gr.Column(visible=True), info,
+            user, gr.update(visible=False), gr.update(visible=True), info,
             gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), chat, user
         )
     return (
-        None, gr.Column(visible=True), gr.Column(visible=False), "用户名或密码错误",
+        None, gr.update(visible=True), gr.update(visible=False), "工号或密码错误",
         gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(False), [], None
     )
 
@@ -30,8 +30,8 @@ def do_login(username, password):
 def do_logout(user_state):
     return (
         None,
-        gr.Column(visible=True),
-        gr.Column(visible=False),
+        gr.update(visible=True),
+        gr.update(visible=False),
         "",
         gr.Tabs(selected=TAB_CHAT),
         _tab_visibility_js(False),
@@ -51,14 +51,14 @@ def restore_from_storage(stored_user):
         save_chat_message(stored_user['user_id'], "assistant", greeting)
 
         return (
-            stored_user, gr.Column(visible=False), gr.Column(visible=True), info,
+            stored_user, gr.update(visible=False), gr.update(visible=True), info,
             gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), chat, stored_user
         )
 
     return (
         None,
-        gr.Column(visible=True),
-        gr.Column(visible=False),
+        gr.update(visible=True),
+        gr.update(visible=False),
         "",
         gr.Tabs(selected=TAB_CHAT),
         _tab_visibility_js(False),

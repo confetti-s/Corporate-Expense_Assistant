@@ -38,7 +38,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     with gr.Column(visible=False, elem_classes=["login-area"]) as login_area:
         gr.Markdown("# 企业财务报销助手")
         gr.Markdown("请登录以使用系统")
-        login_username = gr.Textbox(label="用户名", placeholder="如 zhangsan / sunjl / admin")
+        login_user_id = gr.Textbox(label="工号", placeholder="如 E001 / S001 / ADMIN")
         login_password = gr.Textbox(label="密码", type="password", placeholder="默认密码: 123456")
         with gr.Row():
             login_btn = gr.Button("登录", variant="primary", scale=2)
@@ -63,7 +63,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             reg_msg = gr.Markdown("")
 
     # ========== 主功能区域 ==========
-    with gr.Column(visible=True) as main_area:
+    with gr.Column(visible=True, elem_classes=["main-area"]) as main_area:
         user_info_bar = gr.Markdown("", elem_classes=["user-bar"])
         logout_btn = gr.Button("退出登录", size="sm")
         tab_js_injector = gr.HTML(elem_classes=["tab-js-injector"])
@@ -233,12 +233,12 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     # ========== 登录/注册事件 ==========
     login_btn.click(
         fn=do_login,
-        inputs=[login_username, login_password],
+        inputs=[login_user_id, login_password],
         outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
     )
     login_password.submit(
         fn=do_login,
-        inputs=[login_username, login_password],
+        inputs=[login_user_id, login_password],
         outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
     )
     logout_btn.click(
@@ -249,12 +249,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
         () => {
             try {
                 localStorage.removeItem('expense_user_data');
-                console.log('localStorage 已清除');
             } catch(e) {}
-            setTimeout(() => {
-                document.querySelectorAll('.login-area').forEach(el => { if(el) el.style.display = 'block'; });
-                document.querySelectorAll('.main').forEach(el => { if(el) el.style.display = 'none'; });
-            }, 100);
         }
         """
     )
