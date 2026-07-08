@@ -80,7 +80,6 @@ def _render_jump_buttons(text: str) -> str:
                 f'b=>{{if(b.textContent.trim()===\'{label}\')b.click();}})">'
                 f'{label}</button>'
             )
-        return match.group(0)
 
     return re.sub(r'\[\[(.*?)\]\]', replacer, text)
 
@@ -113,11 +112,15 @@ def do_login(username, password):
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[user["role"]]
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
         is_manager = user["role"] in ("manager", "admin")
-        history = load_chat_history(user['user_id'], limit=10)
-        
+
+        # 新建空对话 + 智能体主动问候
+        greeting = _get_greeting(user)
+        chat = [{"role": "assistant", "content": _render_jump_buttons(greeting)}]
+        save_chat_message(user['user_id'], "assistant", greeting)
+
         return (
             user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), history, user
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), chat, user
         )
     return (
         None, gr.Column(visible=True), gr.Column(visible=False), "用户名或密码错误",
@@ -140,26 +143,29 @@ def do_logout(user_state):
 def restore_from_storage(stored_user):
     """从 BrowserState 恢复"""
     if stored_user and isinstance(stored_user, dict) and stored_user.get('user_id'):
-        # 已登录逻辑（保持不变）
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[stored_user["role"]]
         info = f"当前用户：**{stored_user['name']}** ({stored_user['user_id']}) | 角色：{role_text} | 部门：{stored_user['department_id'] or '无'}"
         is_manager = stored_user["role"] in ("manager", "admin")
-        history = load_chat_history(stored_user['user_id'], limit=10)
-        
+
+        # 新建空对话 + 智能体主动问候
+        greeting = _get_greeting(stored_user)
+        chat = [{"role": "assistant", "content": _render_jump_buttons(greeting)}]
+        save_chat_message(stored_user['user_id'], "assistant", greeting)
+
         return (
             stored_user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), history, stored_user
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), chat, stored_user
         )
-    
+
     # 未登录 - 强制清除
     return (
-        None, 
-        gr.Column(visible=True), 
-        gr.Column(visible=False), 
-        "", 
-        gr.Tabs(selected=TAB_CHAT), 
-        _tab_visibility_js(False), 
-        [], 
+        None,
+        gr.Column(visible=True),
+        gr.Column(visible=False),
+        "",
+        gr.Tabs(selected=TAB_CHAT),
+        _tab_visibility_js(False),
+        [],
         None
     )
 
@@ -269,18 +275,18 @@ def chat_send(message, chat_history, file_uploads, user_state):
             for chunk in agent_run(enhanced_message, chat_history[:-1]):
                 if chunk:
                     full_response += chunk
-                    chat_history[-1]["content"] = full_response
+                    # 流式输出时隐藏 [[...]] 跳转标记，避免先显示纯文字再替换为按钮
+                    display_text = re.sub(r'\[\[.*?\]\]', '', full_response).rstrip()
+                    chat_history[-1]["content"] = display_text
                     yield "", chat_history
             
             print(f"✅ 流式完成，总长度 {len(full_response)}")
 
-            # 将 [[Tab名称]] 替换为可点击的 HTML 按钮
+            # 流式结束后，将 [[Tab名称]] 替换为可点击的 HTML 按钮
             if chat_history and chat_history[-1]["role"] == "assistant":
-                original = chat_history[-1]["content"]
-                rendered = _render_jump_buttons(original)
-                if rendered != original:
-                    chat_history[-1]["content"] = rendered
-                    yield "", chat_history
+                rendered = _render_jump_buttons(full_response)
+                chat_history[-1]["content"] = rendered
+                yield "", chat_history
         else:
             print("⚠️ agent_available = False")
             full_response = "抱歉，智能助手暂不可用，请检查API配置。"
@@ -341,6 +347,53 @@ def ocr_file_handler(file, chat_history, user_state):
 
 def clear_chat():
     return [], ""
+
+
+def _get_greeting(user_state):
+    """同步调用 Agent 获取问候语"""
+    if not agent_available or not user_state:
+        return "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+
+    enhanced_message = "你好"
+    if user_state:
+        enhanced_message += (
+            f"\n[当前用户: {user_state['name']}({user_state['user_id']}), "
+            f"部门: {user_state['department_id']}]"
+        )
+
+    full_response = ""
+    try:
+        for chunk in agent_run(enhanced_message, []):
+            if chunk:
+                full_response += chunk
+    except Exception as e:
+        print(f"获取问候语失败: {e}")
+        return "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+
+    return full_response or "你好！我是企业财务报销助手，有什么可以帮您的吗？"
+
+
+def load_full_chat_history(user_state):
+    """加载用户全部聊天历史，格式化为文本展示"""
+    if not user_state:
+        return "暂无聊天记录"
+    db = SessionLocal()
+    try:
+        records = db.query(ChatHistory)\
+            .filter_by(user_id=user_state['user_id'])\
+            .order_by(ChatHistory.id.asc())\
+            .all()
+        if not records:
+            return "暂无聊天记录"
+        lines = []
+        for r in records:
+            role_label = "👤 用户" if r.role == "user" else "🤖 助手"
+            time_str = r.created_at.strftime('%m-%d %H:%M') if r.created_at else ""
+            content = r.content.replace("\\n", "\n") if r.content else ""
+            lines.append(f"**{role_label}** ({time_str})\n{content}")
+        return "\n\n---\n\n".join(lines)
+    finally:
+        db.close()
 
 
 # ===================== 预算看板 =====================
@@ -643,6 +696,10 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                             )
                             send_btn = gr.Button("发送", variant="primary", scale=1)
 
+                        with gr.Accordion("查看历史聊天", open=False):
+                            history_refresh_btn = gr.Button("刷新历史记录", size="sm")
+                            history_display = gr.Markdown("点击上方按钮加载历史记录", height=300)
+
                 send_btn.click(
                     fn=chat_send,
                     inputs=[msg_input, chatbot_display, file_input, user_state],
@@ -663,6 +720,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                     outputs=[chatbot_display, msg_input]
                 )
                 jump_progress_btn.click(fn=lambda: gr.Tabs(selected=TAB_PROGRESS), outputs=tabs_container)
+                history_refresh_btn.click(fn=load_full_chat_history, inputs=user_state, outputs=history_display)
 
             # ========== Tab 2: 预算看板 ==========
             with gr.Tab(label="预算看板", id=TAB_BUDGET) as budget_tab:
