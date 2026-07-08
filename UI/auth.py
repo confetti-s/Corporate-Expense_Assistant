@@ -6,7 +6,7 @@ from UI.utils import _tab_visibility_js
 
 
 def do_login(user_id, password):
-    user = authenticate_user(user_id, password)
+    user, error = authenticate_user(user_id, password)
     if user:
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[user["role"]]
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
@@ -15,11 +15,11 @@ def do_login(user_id, password):
         return (
 
             user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], user
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], user, ""
         )
     return (
-        None, gr.update(visible=True), gr.update(visible=False), "工号或密码错误",
-        gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(False), [], None
+        None, gr.update(visible=True), gr.update(visible=False), error,
+        gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(False), [], None, f"❌ {error}"
     )
 
 

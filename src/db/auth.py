@@ -11,20 +11,28 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hash_password(password) == password_hash
 
 
-def authenticate_user(user_id: str, password: str) -> dict | None:
+def authenticate_user(user_id: str, password: str) -> tuple[dict | None, str | None]:
+    """验证用户登录。
+    返回 (user_dict, error_message)：
+    - 成功: (user_dict, None)
+    - 工号不存在: (None, "工号不存在")
+    - 密码错误: (None, "密码错误")
+    """
     db = SessionLocal()
     try:
         user = db.query(User).filter_by(user_id=user_id).first()
-        if user and verify_password(password, user.password_hash):
-            return {
-                "user_id": user.user_id,
-                "username": user.username,
-                "role": user.role,
-                "name": user.name,
-                "email": user.email or "",
-                "department_id": user.department_id or "",
-            }
-        return None
+        if not user:
+            return None, "工号不存在"
+        if not verify_password(password, user.password_hash):
+            return None, "密码错误"
+        return {
+            "user_id": user.user_id,
+            "username": user.username,
+            "role": user.role,
+            "name": user.name,
+            "email": user.email or "",
+            "department_id": user.department_id or "",
+        }, None
     finally:
         db.close()
 

@@ -234,7 +234,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     login_btn.click(
         fn=do_login,
         inputs=[login_user_id, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage, login_msg]
     ).then(
         fn=send_greeting,
         inputs=[chatbot_display, user_state],
@@ -243,7 +243,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     login_password.submit(
         fn=do_login,
         inputs=[login_user_id, login_password],
-        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage]
+        outputs=[user_state, login_area, main_area, user_info_bar, tabs_container, tab_js_injector, chatbot_display, user_storage, login_msg]
     ).then(
         fn=send_greeting,
         inputs=[chatbot_display, user_state],
