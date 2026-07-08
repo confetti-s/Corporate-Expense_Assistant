@@ -206,6 +206,8 @@ def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
             invoice_id = _save_invoice_to_db(invoice_data, file_path=file_path, uploaded_by=uploaded_by)
 
             id_hint = f"\n发票记录ID：{invoice_id}" if invoice_id else ""
+            
+            date_hint = f"\n\n⚠️ 注意：开票日期未能识别，请提供该发票的开票日期（格式：YYYY-MM-DD），以便我为您补录。" if not invoice_data['invoice_date'] else ""
 
             return f"""票据识别结果：
 票据类型：{invoice_data['type_name']}
@@ -217,7 +219,7 @@ def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
 销售方名称：{invoice_data['seller_name']}
 销售方税号：{invoice_data['seller_tax_id']}
 购买方名称：{invoice_data['buyer_name']}
-购买方税号：{invoice_data['buyer_tax_id']}{id_hint}"""
+购买方税号：{invoice_data['buyer_tax_id']}{id_hint}{date_hint}"""
         else:
             return "识别结果为空，未检测到票据"
             
@@ -290,9 +292,15 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
     
     total_amount = sum(r["amount"] for r in results)
     
+    missing_date_items = []
+    for i, r in enumerate(results):
+        if not r['invoice_date'] and r.get('invoice_id'):
+            missing_date_items.append(f"票据 {i + 1}（发票记录ID：{r['invoice_id']}）")
+    
     result_str = f"批量识别结果（共 {len(results)} 张票据）：\n\n"
     for i, r in enumerate(results):
         id_hint = f"| 发票记录ID | {r['invoice_id']} |\n" if r.get('invoice_id') else ""
+        date_warning = f"| ⚠️ 缺少日期 | 请补充开票日期 |\n" if not r['invoice_date'] else ""
         result_str += f"""**票据 {i + 1}**
 
 | 项目 | 内容 |
@@ -308,8 +316,38 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
 | 销售方税号 | {r['seller_tax_id']} |
 | 购买方名称 | {r['buyer_name']} |
 | 购买方税号 | {r['buyer_tax_id']} |
-{id_hint}
+{id_hint}{date_warning}
 """
-    result_str += f"**总金额：{total_amount:,.2f} 元**"
+    
+    if missing_date_items:
+        result_str += f"\n⚠️ 以下票据缺少开票日期，请提供对应日期（格式：YYYY-MM-DD）：\n"
+        for item in missing_date_items:
+            result_str += f"- {item}\n"
+    
+    result_str += f"\n**总金额：{total_amount:,.2f} 元**"
     
     return result_str
+
+
+@tool("更新发票日期")
+def update_invoice_date(invoice_id: int, invoice_date: str) -> str:
+    """
+    更新发票记录的开票日期，用于补录OCR未能识别的日期
+    :param invoice_id: 发票记录ID（OCR识别时返回的发票记录ID）
+    :param invoice_date: 开票日期，格式为YYYY-MM-DD（如2024-01-15）
+    :return: 更新结果提示
+    """
+    db = SessionLocal()
+    try:
+        invoice = db.query(Invoice).filter_by(id=invoice_id).first()
+        if not invoice:
+            return f"错误：未找到发票记录ID为 {invoice_id} 的发票"
+        
+        invoice.invoice_date = invoice_date
+        db.commit()
+        return f"成功：发票记录ID {invoice_id} 的开票日期已更新为 {invoice_date}"
+    except Exception as e:
+        db.rollback()
+        return f"更新失败：{str(e)}"
+    finally:
+        db.close()

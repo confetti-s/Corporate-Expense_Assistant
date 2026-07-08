@@ -72,6 +72,8 @@ class Invoice(Base):
     uploaded_by = Column(String(32), ForeignKey('users.user_id'))
     reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
     reimbursement_no = Column(String(32), nullable=True)
+    is_valid = Column(Boolean, default=True)
+    invalid_reason = Column(String(200))
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

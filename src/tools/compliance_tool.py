@@ -1,4 +1,7 @@
 from langchain.tools import tool
+from datetime import datetime
+from src.db.database import SessionLocal
+from src.db.models import Invoice
 
 COMPANY_POLICY = {
     "差旅费": {
@@ -24,40 +27,94 @@ COMPANY_POLICY = {
 }
 
 @tool("合规审查")
-def compliance_check(expense_type: str, amount: float, quantity: int = 1) -> str:
+def compliance_check(expense_type: str, invoice_ids: str) -> str:
     """
-    检查费用是否符合公司报销政策
+    检查多张发票是否符合公司报销政策（含90天时效性校验和金额合规检查）
     :param expense_type: 费用类型，如 差旅费、招待费、办公用品、交通费、通讯费
-    :param amount: 报销金额
-    :param quantity: 数量/人数/天数（默认1）
+    :param invoice_ids: 发票ID列表，用逗号分隔，如 "1,2,3"
     :return: 合规审查结果字符串
     """
     if expense_type not in COMPANY_POLICY:
         return f"未知费用类型：{expense_type}，请选择以下类型之一：{', '.join(COMPANY_POLICY.keys())}"
     
-    policy = COMPANY_POLICY[expense_type]
-    limit_key = list(policy.keys())[0]
-    limit_value = policy[limit_key]
-    description = policy["description"]
+    if not invoice_ids.strip():
+        return "错误：发票ID列表不能为空"
     
-    per_unit_amount = amount / quantity
+    db = SessionLocal()
+    try:
+        id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
+        
+        invalid_invoices = []
+        valid_invoices = []
+        
+        policy = COMPANY_POLICY[expense_type]
+        limit_key = list(policy.keys())[0]
+        limit_value = policy[limit_key]
+        
+        for inv_id in id_list:
+            invoice = db.query(Invoice).filter_by(id=inv_id).first()
+            if not invoice:
+                invalid_invoices.append({
+                    "id": inv_id,
+                    "reason": "发票记录不存在",
+                    "date": ""
+                })
+                continue
+            
+            invalid_reason = None
+            
+            if not invoice.invoice_date:
+                invalid_reason = "缺少开票日期，无法进行时效性校验"
+            else:
+                try:
+                    invoice_dt = datetime.strptime(invoice.invoice_date, "%Y-%m-%d")
+                    days_diff = (datetime.now() - invoice_dt).days
+                    
+                    if days_diff > 90:
+                        invalid_reason = f"超过90天有效期（发票日期：{invoice.invoice_date}）"
+                except ValueError:
+                    invalid_reason = "发票日期格式不正确"
+            
+            if not invalid_reason:
+                if invoice.amount > limit_value:
+                    invalid_reason = "金额超过合规标准"
+            
+            if invalid_reason:
+                invoice.is_valid = False
+                invoice.invalid_reason = invalid_reason
+                invalid_invoices.append({
+                    "id": inv_id,
+                    "reason": invalid_reason,
+                    "date": invoice.invoice_date
+                })
+            else:
+                invoice.is_valid = True
+                invoice.invalid_reason = None
+                valid_invoices.append(invoice)
+        
+        db.commit()
+        
+        valid_total = sum(inv.amount for inv in valid_invoices)
+        
+        result = f"合规审查完成。\n"
+        result += f"合规发票：{len(valid_invoices)} 张，合计金额 {valid_total:,.2f} 元\n"
+        
+        if invalid_invoices:
+            result += f"不合规发票：{len(invalid_invoices)} 张\n"
+            for inv in invalid_invoices:
+                result += f"  - 发票 ID {inv['id']}：{inv['reason']}\n"
+        
+        result += f"本次可报销金额：{valid_total:,.2f} 元"
+        
+        return result
     
-    if per_unit_amount <= limit_value:
-        return f"""合规审查通过！
-费用类型：{expense_type}
-报销金额：{amount:,.2f} 元
-{description}：{limit_value:,.2f} 元
-本次人均/每日金额：{per_unit_amount:,.2f} 元
-符合公司报销政策。"""
-    else:
-        excess = per_unit_amount - limit_value
-        return f"""合规审查不通过！
-费用类型：{expense_type}
-报销金额：{amount:,.2f} 元
-{description}：{limit_value:,.2f} 元
-本次人均/每日金额：{per_unit_amount:,.2f} 元
-超出标准：{excess:,.2f} 元
-需要特殊审批说明。"""
+    except ValueError:
+        return "错误：发票ID列表格式不正确，请确保为数字，用逗号分隔"
+    except Exception as e:
+        db.rollback()
+        return f"合规审查失败：{str(e)}"
+    finally:
+        db.close()
 
 @tool("金额汇总")
 def calculate_total_amount(amounts: str) -> str:

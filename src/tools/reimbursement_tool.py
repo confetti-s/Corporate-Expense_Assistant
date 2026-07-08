@@ -10,11 +10,10 @@ def create_reimbursement(
     employee_name: str,
     department_id: str,
     expense_type: str,
-    total_amount: float,
+    invoice_ids: str,
     description: str = "",
     invoice_details_json: str = "[]",
-    applicant_email: str = "",
-    invoice_ids: str = ""
+    applicant_email: str = ""
 ) -> str:
     """
     创建一条新的报销记录并存入数据库，返回报销单号
@@ -22,21 +21,42 @@ def create_reimbursement(
     :param employee_name: 员工姓名
     :param department_id: 部门ID，如 D001-D005
     :param expense_type: 费用类型，如 差旅费、招待费、办公用品、交通费、通讯费
-    :param total_amount: 报销总金额（元）
+    :param invoice_ids: 发票记录ID列表，用逗号分隔（必填，如"1,2,3"，关联Invoice表中的发票）
     :param description: 报销说明（可选）
     :param invoice_details_json: 发票OCR结果的JSON数组字符串（可选）
     :param applicant_email: 申请人邮箱（可选，用于审批通知）
-    :param invoice_ids: 发票记录ID列表，用逗号分隔（可选，如"1,2,3"，关联Invoice表中的发票）
     """
     db = SessionLocal()
     try:
+        if not invoice_ids.strip():
+            return "错误：发票ID列表不能为空"
+        
+        id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
+        
         # 发票重复报销校验
-        if invoice_ids:
-            id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
-            for inv_id in id_list:
-                inv = db.query(Invoice).filter_by(id=inv_id).first()
-                if inv and inv.reimbursement_id is not None:
-                    return f"错误：发票记录ID {inv_id}（{inv.invoice_type_name}，{inv.amount:,.2f}元）已关联报销单 {inv.reimbursement_no}，不可重复报销"
+        for inv_id in id_list:
+            inv = db.query(Invoice).filter_by(id=inv_id).first()
+            if inv and inv.reimbursement_id is not None:
+                return f"错误：发票记录ID {inv_id}（{inv.invoice_type_name}，{inv.amount:,.2f}元）已关联报销单 {inv.reimbursement_no}，不可重复报销"
+        
+        # 查询所有发票并计算合规金额
+        valid_invoices = []
+        invalid_invoices = []
+        for inv_id in id_list:
+            inv = db.query(Invoice).filter_by(id=inv_id).first()
+            if inv:
+                if inv.is_valid:
+                    valid_invoices.append(inv)
+                else:
+                    invalid_invoices.append(inv)
+        
+        # 如果没有合规发票，拒绝创建报销单
+        if not valid_invoices:
+            invalid_reasons = "\n".join([f"  - 发票ID {inv.id}：{inv.invalid_reason or '未标记为合规'}" for inv in invalid_invoices])
+            return f"错误：所选发票中没有合规的发票，无法创建报销单。\n不合规原因：\n{invalid_reasons}"
+        
+        # 计算合规发票总金额
+        total_amount = sum(inv.amount for inv in valid_invoices)
 
         year = datetime.now().strftime("%Y")
         last_record = db.query(Reimbursements).filter(
@@ -79,21 +99,20 @@ def create_reimbursement(
         db.commit()
         db.refresh(record)
 
-        # 关联发票记录
+        # 关联所有发票记录（包括不合规的，用于留痕）
         linked_count = 0
-        if invoice_ids:
-            id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
-            for inv_id in id_list:
-                inv = db.query(Invoice).filter_by(id=inv_id).first()
-                if inv:
-                    inv.reimbursement_id = record.id
-                    inv.reimbursement_no = reimbursement_no
-                    linked_count += 1
-            db.commit()
+        for inv_id in id_list:
+            inv = db.query(Invoice).filter_by(id=inv_id).first()
+            if inv:
+                inv.reimbursement_id = record.id
+                inv.reimbursement_no = reimbursement_no
+                linked_count += 1
+        db.commit()
 
         special_note = "（需特殊审批）" if need_special_approval else ""
-        invoice_note = f"\n已关联 {linked_count} 张发票记录" if linked_count > 0 else ""
-        return (
+        invoice_note = f"\n已关联 {linked_count} 张发票记录（合规 {len(valid_invoices)} 张，不合规 {len(invalid_invoices)} 张）" if linked_count > 0 else ""
+        
+        result = (
             f"报销单创建成功！\n"
             f"报销单号：{reimbursement_no}\n"
             f"员工：{employee_name}（{employee_id}）\n"
@@ -101,9 +120,16 @@ def create_reimbursement(
             f"费用类型：{expense_type}\n"
             f"金额：{total_amount:,.2f} 元{special_note}\n"
             f"状态：草稿{invoice_note}\n"
-            f"请记住报销单号 {reimbursement_no}，接下来需要提交审批。\n"
-            f"[[进度查询]]"
         )
+        
+        if invalid_invoices:
+            result += f"不合规发票明细：\n"
+            for inv in invalid_invoices:
+                result += f"  - 发票ID {inv.id}：{inv.invalid_reason}\n"
+        
+        result += f"请记住报销单号 {reimbursement_no}，接下来需要提交审批。\n[[进度查询]]"
+        
+        return result
     except Exception as e:
         db.rollback()
         return f"创建报销单失败：{str(e)}"

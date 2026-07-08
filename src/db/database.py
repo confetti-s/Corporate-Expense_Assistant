@@ -75,10 +75,32 @@ def _migrate_add_chat_history():
     except Exception as e:
         print(f"[MIGRATION WARNING] chat_history migration failed: {e}")
 
+def _migrate_add_invoice_valid_fields():
+    try:
+        inspector = inspect(engine)
+        if 'invoices' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('invoices')]
+        
+        with engine.connect() as conn:
+            if 'is_valid' not in existing_columns:
+                conn.execute(text("ALTER TABLE invoices ADD COLUMN is_valid INTEGER DEFAULT 1"))
+                print("[MIGRATION] Added is_valid column to invoices")
+            
+            if 'invalid_reason' not in existing_columns:
+                conn.execute(text("ALTER TABLE invoices ADD COLUMN invalid_reason VARCHAR(200)"))
+                print("[MIGRATION] Added invalid_reason column to invoices")
+            
+            conn.commit()
+    except Exception as e:
+        print(f"[MIGRATION WARNING] {e}")
+
+
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
     _migrate_add_invoice_details()
     _migrate_add_applicant_email()
     _migrate_add_chat_history()
+    _migrate_add_invoice_valid_fields()
     print("Database initialized successfully")
