@@ -51,6 +51,7 @@ class Reimbursements(Base):
     department = relationship('DepartmentBudget', back_populates='reimbursements')
     approval_records = relationship('ApprovalRecords', back_populates='reimbursement', cascade='all, delete-orphan')
     invoices = relationship('Invoice', back_populates='reimbursement')
+    vouchers = relationship('Voucher', back_populates='reimbursement')
 
 
 class Invoice(Base):
@@ -79,6 +80,27 @@ class Invoice(Base):
 
     uploader = relationship('User')
     reimbursement = relationship('Reimbursements', back_populates='invoices')
+
+
+class Voucher(Base):
+    __tablename__ = 'vouchers'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    voucher_type = Column(String(50), default="其他")
+    amount = Column(Float, default=0.0)
+    payment_date = Column(String(20))
+    payee = Column(String(200))
+    description = Column(Text)
+    ocr_result = Column(Text)
+    file_path = Column(String(500))
+    uploaded_by = Column(String(32), ForeignKey('users.user_id'))
+    reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
+    reimbursement_no = Column(String(32), nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    uploader = relationship('User')
+    reimbursement = relationship('Reimbursements', back_populates='vouchers')
 
 
 class DepartmentBudget(Base):

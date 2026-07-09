@@ -3,7 +3,8 @@ import requests
 import base64
 import json
 import os
-from config import BAIDU_OCR_API_KEY, BAIDU_OCR_SECRET_KEY, BAIDU_OCR_TOKEN_URL, BAIDU_OCR_API_URL
+import shutil
+from config import BAIDU_OCR_API_KEY, BAIDU_OCR_SECRET_KEY, BAIDU_OCR_TOKEN_URL, BAIDU_OCR_API_URL, UPLOADS_DIR
 from src.db.database import SessionLocal
 from src.db.models import Invoice
 
@@ -72,6 +73,19 @@ def _extract_field(result_dict, key, default=""):
     if isinstance(val, str):
         return val
     return default
+
+
+def _persist_file(src_path: str, subdir: str) -> str:
+    """将Gradio临时文件复制到持久化目录，返回持久路径"""
+    if not src_path or not os.path.exists(src_path):
+        return src_path
+    dest_dir = os.path.join(UPLOADS_DIR, subdir)
+    os.makedirs(dest_dir, exist_ok=True)
+    filename = os.path.basename(src_path)
+    dest_path = os.path.join(dest_dir, filename)
+    if os.path.abspath(src_path) != os.path.abspath(dest_path):
+        shutil.copy2(src_path, dest_path)
+    return dest_path
 
 
 def _save_invoice_to_db(invoice_data, file_path="", uploaded_by=""):
@@ -171,6 +185,7 @@ def _call_ocr_api(file_path: str) -> dict:
     if _is_pdf(file_path):
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {"pdf_file": encoded_data.decode("utf-8")}
+        data["pdf_file_num"] = "1"
     else:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = {"image": encoded_data.decode("utf-8")}
@@ -182,59 +197,6 @@ def _call_ocr_api(file_path: str) -> dict:
     response = requests.post(url, headers=headers, data=data)
     response.raise_for_status()
     return response.json()
-
-
-def _build_invoice_table(invoices: list, file_label: bool = False) -> str:
-    """将发票列表格式化为markdown表格字符串"""
-    total_amount = sum(inv["amount"] for inv in invoices)
-    missing_date_items = []
-    for i, inv in enumerate(invoices):
-        if not inv['invoice_date'] and inv.get('invoice_id'):
-            missing_date_items.append(f"发票 {i + 1}（发票记录ID：{inv['invoice_id']}）")
-
-    lines = []
-    for i, inv in enumerate(invoices):
-        file_line = f"| 文件 | {inv.get('file', '')} |\n" if file_label and inv.get('file') else ""
-        id_hint = f"| 发票记录ID | {inv['invoice_id']} |\n" if inv.get('invoice_id') else ""
-        date_warning = f"| ⚠️ 缺少日期 | 请补充开票日期 |\n" if not inv['invoice_date'] else ""
-        lines.append(f"""**发票 {i + 1}**
-
-| 项目 | 内容 |
-|------|------|
-{file_line}| 票据类型 | {inv['type_name']} |
-| 置信度 | {inv['probability']} |
-| 发票代码 | {inv['invoice_code']} |
-| 发票号码 | {inv['invoice_number']} |
-| 金额 | {inv['amount']:,.2f} 元 |
-| 开票日期 | {inv['invoice_date']} |
-| 销售方名称 | {inv['seller_name']} |
-| 销售方税号 | {inv['seller_tax_id']} |
-| 购买方名称 | {inv['buyer_name']} |
-| 购买方税号 | {inv['buyer_tax_id']} |
-{id_hint}{date_warning}""")
-
-    result_str = "\n\n".join(lines)
-
-    if missing_date_items:
-        result_str += f"\n\n⚠️ 以下发票缺少开票日期，请提供对应日期（格式：YYYY-MM-DD）：\n"
-        for item in missing_date_items:
-            result_str += f"- {item}\n"
-
-    result_str += f"\n**总金额：{total_amount:,.2f} 元**"
-    return result_str
-
-
-def _process_api_result(result: dict, file_path: str, uploaded_by: str) -> list:
-    """处理OCR API返回结果，将每张发票解析并存入数据库，返回发票数据列表"""
-    invoices = []
-    words_results = result.get("words_result", [])
-    for wr in words_results:
-        invoice_data = parse_invoice_result(wr)
-        invoice_id = _save_invoice_to_db(invoice_data, file_path=file_path, uploaded_by=uploaded_by)
-        invoice_data["invoice_id"] = invoice_id
-        invoice_data["file"] = os.path.basename(file_path)
-        invoices.append(invoice_data)
-    return invoices
 
 
 @tool("票据OCR识别")
@@ -253,23 +215,29 @@ def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
         result = _call_ocr_api(file_path)
 
         if result.get("words_result_num", 0) > 0:
-            invoices = _process_api_result(result, file_path, uploaded_by)
+            invoice_data = parse_invoice_result(result["words_result"][0])
+
+            # 持久化图片文件
+            persistent_path = _persist_file(file_path, "invoices")
+
+            # 存入Invoice表
+            invoice_id = _save_invoice_to_db(invoice_data, file_path=persistent_path, uploaded_by=uploaded_by)
 
             if len(invoices) == 1:
                 inv = invoices[0]
                 id_hint = f"\n发票记录ID：{inv['invoice_id']}" if inv['invoice_id'] else ""
                 date_hint = f"\n\n⚠️ 注意：开票日期未能识别，请提供该发票的开票日期（格式：YYYY-MM-DD），以便我为您补录。" if not inv['invoice_date'] else ""
                 return f"""票据识别结果：
-票据类型：{inv['type_name']}
-置信度：{inv['probability']}
-发票代码：{inv['invoice_code']}
-发票号码：{inv['invoice_number']}
-金额：{inv['amount']:,.2f} 元
-开票日期：{inv['invoice_date']}
-销售方名称：{inv['seller_name']}
-销售方税号：{inv['seller_tax_id']}
-购买方名称：{inv['buyer_name']}
-购买方税号：{inv['buyer_tax_id']}{id_hint}{date_hint}"""
+票据类型：{invoice_data['type_name']}
+置信度：{invoice_data['probability']}
+发票代码：{invoice_data['invoice_code']}
+发票号码：{invoice_data['invoice_number']}
+金额：{invoice_data['amount']:,.2f} 元
+开票日期：{invoice_data['invoice_date']}
+销售方名称：{invoice_data['seller_name']}
+销售方税号：{invoice_data['seller_tax_id']}
+购买方名称：{invoice_data['buyer_name']}
+购买方税号：{invoice_data['buyer_tax_id']}{id_hint}{date_hint}"""
 
             return f"该文件共识别出 {len(invoices)} 张发票：\n\n{_build_invoice_table(invoices)}"
         else:
@@ -298,8 +266,23 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
             result = _call_ocr_api(file_path)
 
             if result.get("words_result_num", 0) > 0:
-                invoices = _process_api_result(result, file_path, uploaded_by)
-                all_invoices.extend(invoices)
+                invoice_data = parse_invoice_result(result["words_result"][0])
+                persistent_path = _persist_file(file_path, "invoices")
+                inv_id = _save_invoice_to_db(invoice_data, file_path=persistent_path, uploaded_by=uploaded_by)
+                all_invoices.append({
+                    "file": os.path.basename(file_path),
+                    "type_name": invoice_data["type_name"],
+                    "probability": invoice_data["probability"],
+                    "amount": invoice_data["amount"],
+                    "invoice_code": invoice_data["invoice_code"],
+                    "invoice_number": invoice_data["invoice_number"],
+                    "invoice_date": invoice_data["invoice_date"],
+                    "seller_name": invoice_data["seller_name"],
+                    "seller_tax_id": invoice_data["seller_tax_id"],
+                    "buyer_name": invoice_data["buyer_name"],
+                    "buyer_tax_id": invoice_data["buyer_tax_id"],
+                    "invoice_id": inv_id
+                })
             else:
                 all_invoices.append({
                     "file": os.path.basename(file_path),
@@ -330,10 +313,44 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
                 "buyer_tax_id": "",
                 "invoice_id": None
             })
-
+    
+    total_amount = sum(r["amount"] for r in all_invoices)
+    
+    missing_date_items = []
+    for i, r in enumerate(all_invoices):
+        if not r['invoice_date'] and r.get('invoice_id'):
+            missing_date_items.append(f"票据 {i + 1}（发票记录ID：{r['invoice_id']}）")
+    
     result_str = f"批量识别结果（共 {len(all_invoices)} 张票据）：\n\n"
-    result_str += _build_invoice_table(all_invoices, file_label=True)
+    for i, r in enumerate(all_invoices):
+        id_hint = f"| 发票记录ID | {r['invoice_id']} |\n" if r.get('invoice_id') else ""
+        date_warning = f"| ⚠️ 缺少日期 | 请补充开票日期 |\n" if not r['invoice_date'] else ""
+        result_str += f"""**票据 {i + 1}**
+        result_str += _build_invoice_table(all_invoices, file_label=True)
 
+| 项目 | 内容 |
+|------|------|
+| 文件 | {r['file']} |
+| 票据类型 | {r['type_name']} |
+| 置信度 | {r['probability']} |
+| 发票代码 | {r['invoice_code']} |
+| 发票号码 | {r['invoice_number']} |
+| 金额 | {r['amount']:,.2f} 元 |
+| 开票日期 | {r['invoice_date']} |
+| 销售方名称 | {r['seller_name']} |
+| 销售方税号 | {r['seller_tax_id']} |
+| 购买方名称 | {r['buyer_name']} |
+| 购买方税号 | {r['buyer_tax_id']} |
+{id_hint}{date_warning}
+"""
+    
+    if missing_date_items:
+        result_str += f"\n⚠️ 以下票据缺少开票日期，请提供对应日期（格式：YYYY-MM-DD）：\n"
+        for item in missing_date_items:
+            result_str += f"- {item}\n"
+    
+    result_str += f"\n**总金额：{total_amount:,.2f} 元**"
+    
     return result_str
 
 

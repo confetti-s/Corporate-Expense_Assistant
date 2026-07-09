@@ -1,6 +1,6 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
-from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User, Invoice
+from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User, Invoice, Voucher
 from datetime import datetime
 
 
@@ -13,7 +13,8 @@ def create_reimbursement(
     invoice_ids: str,
     description: str = "",
     invoice_details_json: str = "[]",
-    applicant_email: str = ""
+    applicant_email: str = "",
+    voucher_ids: str = ""
 ) -> str:
     """
     创建一条新的报销记录并存入数据库，返回报销单号
@@ -25,6 +26,7 @@ def create_reimbursement(
     :param description: 报销说明（可选）
     :param invoice_details_json: 发票OCR结果的JSON数组字符串（可选）
     :param applicant_email: 申请人邮箱（可选，用于审批通知）
+    :param voucher_ids: 凭证记录ID列表，用逗号分隔（可选，如"1,2"，关联Voucher表中的凭证）
     """
     db = SessionLocal()
     try:
@@ -57,6 +59,20 @@ def create_reimbursement(
         
         # 计算合规发票总金额
         total_amount = sum(inv.amount for inv in valid_invoices)
+
+        # 查询并累加凭证金额
+        voucher_list = []
+        voucher_amount = 0.0
+        if voucher_ids and voucher_ids.strip():
+            vid_list = [int(x.strip()) for x in voucher_ids.split(",") if x.strip()]
+            for vid in vid_list:
+                v = db.query(Voucher).filter_by(id=vid).first()
+                if v:
+                    if v.reimbursement_id is not None:
+                        return f"错误：凭证记录ID {vid}已关联报销单 {v.reimbursement_no}，不可重复报销"
+                    voucher_list.append(v)
+                    voucher_amount += v.amount or 0
+            total_amount += voucher_amount
 
         year = datetime.now().strftime("%Y")
         last_record = db.query(Reimbursements).filter(
@@ -109,8 +125,17 @@ def create_reimbursement(
                 linked_count += 1
         db.commit()
 
+        # 关联凭证记录
+        linked_voucher_count = 0
+        for v in voucher_list:
+            v.reimbursement_id = record.id
+            v.reimbursement_no = reimbursement_no
+            linked_voucher_count += 1
+        db.commit()
+
         special_note = "（需特殊审批）" if need_special_approval else ""
         invoice_note = f"\n已关联 {linked_count} 张发票记录（合规 {len(valid_invoices)} 张，不合规 {len(invalid_invoices)} 张）" if linked_count > 0 else ""
+        voucher_note = f"\n已关联 {linked_voucher_count} 张凭证记录（金额 {voucher_amount:,.2f} 元）" if linked_voucher_count > 0 else ""
         
         result = (
             f"报销单创建成功！\n"
@@ -119,7 +144,7 @@ def create_reimbursement(
             f"部门：{department_id}\n"
             f"费用类型：{expense_type}\n"
             f"金额：{total_amount:,.2f} 元{special_note}\n"
-            f"状态：草稿{invoice_note}\n"
+            f"状态：草稿{invoice_note}{voucher_note}\n"
         )
         
         if invalid_invoices:

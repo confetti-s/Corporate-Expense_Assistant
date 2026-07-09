@@ -4,6 +4,7 @@ import re
 from src.db.database import SessionLocal
 from src.db.models import ChatHistory
 from src.tools.ocr_tool import ocr_invoice, batch_ocr_invoices
+from src.tools.voucher_tool import recognize_voucher
 from UI.utils import _render_jump_buttons
 
 # ===================== Agent 初始化 =====================
@@ -249,6 +250,28 @@ def ocr_file_handler(file, chat_history, user_state):
 
     chat_history = chat_history or []
     chat_history.append({"role": "user", "content": f"[上传发票] {filename}"})
+    chat_history.append({"role": "assistant", "content": result})
+
+    return chat_history, None
+
+
+def voucher_file_handler(file, chat_history, user_state):
+    """处理凭证截图上传，调用通用文字识别"""
+    if not file:
+        return chat_history or [], None
+
+    try:
+        fp = file.name if hasattr(file, 'name') else str(file)
+        user_id = user_state['user_id'] if user_state else ""
+        filename = os.path.basename(fp)
+
+        result = recognize_voucher.func(fp, uploaded_by=user_id)
+    except Exception as e:
+        filename = "文件"
+        result = f"识别凭证时出错：{str(e)}"
+
+    chat_history = chat_history or []
+    chat_history.append({"role": "user", "content": f"[上传凭证] {filename}"})
     chat_history.append({"role": "assistant", "content": result})
 
     return chat_history, None
