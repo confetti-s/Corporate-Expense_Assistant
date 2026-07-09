@@ -34,7 +34,7 @@ ALIBABA_MAAS_BASE_URL = f"https://{WORKSPACE_ID}.cn-beijing.maas.aliyuncs.com/co
 
 BAIDU_OCR_TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 BAIDU_OCR_API_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/multiple_invoice"
-BAIDU_GENERAL_OCR_API_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"
+BAIDU_GENERAL_OCR_API_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/general"
 
 def check_config():
     errors = []
