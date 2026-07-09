@@ -79,6 +79,9 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
         if not approver_user or not approver_user.email:
             return f"审批人 {approver_rec.approver_name}（{approver_rec.approver_id}）未设置邮箱"
 
+        from src.tools.pdf_tool import auto_generate_pdf
+        pdf_path = auto_generate_pdf(reimbursement_no)
+
         subject = f"【报销审批通知】{reimb.employee_name}-{reimb.expense_type}报销单{reimbursement_no}待审批"
         body = (
             f"您有一条新的报销审批待处理：\n\n"
@@ -91,11 +94,12 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
             f"请及时登录系统进行审批。"
         )
 
+        final_attachment = attachment_path or pdf_path
         result = send_email.func(
             to_email=approver_user.email,
             subject=subject,
             body=body,
-            attachment_path=attachment_path,
+            attachment_path=final_attachment,
         )
         return f"已通知第一级审批人 {approver_rec.approver_name}（{approver_rec.approver_id}，邮箱：{approver_user.email}）\n{result}"
     except Exception as e:

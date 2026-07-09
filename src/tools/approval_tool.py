@@ -257,6 +257,8 @@ def _send_notification_email(db, reimbursement, action, approver_name, comment):
 
     try:
         from src.tools.email_tool import send_email
+        from src.tools.pdf_tool import auto_generate_pdf
+        pdf_path = auto_generate_pdf(reimbursement.reimbursement_no)
         action_text = "通过" if action == "approved" else "驳回"
         send_email.func(
             to_email=reimbursement.applicant_email,
@@ -267,7 +269,8 @@ def _send_notification_email(db, reimbursement, action, approver_name, comment):
                 f"金额：{reimbursement.total_amount:,.2f} 元\n"
                 f"费用类型：{reimbursement.expense_type}\n"
                 f"审批意见：{comment or '无'}"
-            )
+            ),
+            attachment_path=pdf_path if pdf_path else None
         )
     except Exception as e:
         print(f"[邮件通知失败] {e}")
@@ -297,6 +300,8 @@ def _send_next_approver_email(db, reimbursement, next_level):
             return
 
         from src.tools.email_tool import send_email
+        from src.tools.pdf_tool import auto_generate_pdf
+        pdf_path = auto_generate_pdf(reimbursement.reimbursement_no)
         send_email.func(
             to_email=approver_user.email,
             subject=f"待审批：报销单{reimbursement.reimbursement_no}",
@@ -307,7 +312,8 @@ def _send_next_approver_email(db, reimbursement, next_level):
                 f"金额：{reimbursement.total_amount:,.2f} 元\n"
                 f"费用类型：{reimbursement.expense_type}\n"
                 f"审批级别：第{next_level}级"
-            )
+            ),
+            attachment_path=pdf_path if pdf_path else None
         )
     except Exception as e:
         print(f"[邮件通知失败] {e}")

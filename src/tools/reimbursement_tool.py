@@ -242,74 +242,52 @@ def _send_ai_approval_email(db, reimbursement_no):
             return
     except Exception:
         return
-    
+
     reimbursement = db.query(Reimbursements).filter_by(reimbursement_no=reimbursement_no).first()
     if not reimbursement:
         return
-    
+
     approver_rec = db.query(DepartmentApprover).filter_by(
         department_id=reimbursement.department_id,
         approval_level=1
     ).first()
     if not approver_rec:
         return
-    
+
     approver_user = db.query(User).filter_by(user_id=approver_rec.approver_id).first()
     if not approver_user or not approver_user.email:
         return
-    
+
     invoices = db.query(Invoice).filter_by(reimbursement_id=reimbursement.id).all()
     invoice_details = "\n".join([
         f"  - {inv.invoice_type_name}：{inv.amount:,.2f}元（{inv.invoice_date}）"
         for inv in invoices
     ])
-    
-    attachment_paths = [inv.file_path for inv in invoices if inv.file_path]
-    
+
+    from src.tools.pdf_tool import auto_generate_pdf
+    pdf_path = auto_generate_pdf(reimbursement_no)
+
     from src.tools.email_tool import send_email
-    if attachment_paths:
-        for idx, path in enumerate(attachment_paths):
-            if idx == 0:
-                send_email.func(
-                    to_email=approver_user.email,
-                    subject=f"【AI自动审批通过】报销单{reimbursement.reimbursement_no}",
-                    body=(
-                        f"您好，以下报销单已由AI自动审批通过：\n\n"
-                        f"报销单号：{reimbursement.reimbursement_no}\n"
-                        f"申请人：{reimbursement.employee_name}（{reimbursement.employee_id}）\n"
-                        f"部门：{reimbursement.department_id}\n"
-                        f"费用类型：{reimbursement.expense_type}\n"
-                        f"金额：{reimbursement.total_amount:,.2f} 元\n"
-                        f"审批时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                        f"发票详情：\n{invoice_details}\n\n"
-                        f"AI决策依据：\n"
-                        f"  - 所有发票均合规\n"
-                        f"  - 部门预算充足\n"
-                        f"  - 金额≤1000元，符合自动审批条件\n\n"
-                        f"此邮件仅供您知悉，无需额外操作。"
-                    ),
-                    attachment_path=path
-                )
-    else:
-        send_email.func(
-            to_email=approver_user.email,
-            subject=f"【AI自动审批通过】报销单{reimbursement.reimbursement_no}",
-            body=(
-                f"您好，以下报销单已由AI自动审批通过：\n\n"
-                f"报销单号：{reimbursement.reimbursement_no}\n"
-                f"申请人：{reimbursement.employee_name}（{reimbursement.employee_id}）\n"
-                f"部门：{reimbursement.department_id}\n"
-                f"费用类型：{reimbursement.expense_type}\n"
-                f"金额：{reimbursement.total_amount:,.2f} 元\n"
-                f"审批时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-                f"发票详情：\n{invoice_details}\n\n"
-                f"AI决策依据：\n"
-                f"  - 所有发票均合规\n"
-                f"  - 部门预算充足\n"
-                f"  - 金额≤1000元，符合自动审批条件\n\n"
-                f"此邮件仅供您知悉，无需额外操作。"
-            )
-        )
+    send_email.func(
+        to_email=approver_user.email,
+        subject=f"【AI自动审批通过】报销单{reimbursement.reimbursement_no}",
+        body=(
+            f"您好，以下报销单已由AI自动审批通过：\n\n"
+            f"报销单号：{reimbursement.reimbursement_no}\n"
+            f"申请人：{reimbursement.employee_name}（{reimbursement.employee_id}）\n"
+            f"部门：{reimbursement.department_id}\n"
+            f"费用类型：{reimbursement.expense_type}\n"
+            f"金额：{reimbursement.total_amount:,.2f} 元\n"
+            f"审批时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+            f"发票详情：\n{invoice_details}\n\n"
+            f"AI决策依据：\n"
+            f"  - 所有发票均合规\n"
+            f"  - 部门预算充足\n"
+            f"  - 金额≤1000元，符合自动审批条件\n\n"
+            f"此邮件仅供您知悉，无需额外操作。"
+        ),
+        attachment_path=pdf_path if pdf_path else None
+    )
 
 
 def _create_approval_records(db, reimbursement):

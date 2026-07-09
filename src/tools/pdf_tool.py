@@ -258,3 +258,36 @@ def generate_reimbursement_pdf(
 
     doc.build(elements)
     return f"报销单PDF已生成：{pdf_path}"
+
+
+def auto_generate_pdf(reimbursement_no: str) -> str:
+    """根据报销单号自动从DB取数据生成PDF，返回文件路径，失败返回空字符串"""
+    from src.db.models import Reimbursements, DepartmentBudget
+    db = SessionLocal()
+    try:
+        reimb = db.query(Reimbursements).filter_by(reimbursement_no=reimbursement_no).first()
+        if not reimb:
+            print(f"[PDF] 未找到报销单 {reimbursement_no}")
+            return ""
+
+        dept = db.query(DepartmentBudget).filter_by(department_id=reimb.department_id).first()
+        dept_name = dept.department_name if dept else reimb.department_id or ""
+
+        result = generate_reimbursement_pdf.func(
+            reimbursement_no=reimb.reimbursement_no,
+            employee_name=reimb.employee_name,
+            department=dept_name,
+            expense_type=reimb.expense_type,
+            total_amount=reimb.total_amount,
+            description=reimb.description or "",
+            invoice_details_json=reimb.invoice_details or "[]"
+        )
+        if "已生成：" in result:
+            return result.split("已生成：")[1].strip()
+        print(f"[PDF] 生成结果: {result}")
+        return ""
+    except Exception as e:
+        print(f"[PDF] 自动生成失败: {e}")
+        return ""
+    finally:
+        db.close()
