@@ -218,41 +218,47 @@ def _call_ocr_api(file_path: str) -> dict:
 
 def _format_single_invoice(inv):
     inv_id = inv.get('invoice_id')
-    id_hint = f"\n发票记录ID：{inv_id}" if inv_id else ""
-    date_hint = f"\n\n注意：开票日期未能识别，请提供该发票的开票日期（格式：YYYY-MM-DD），以便补录。" if not inv.get('invoice_date') else ""
-    return f"""票据识别结果：
-票据类型：{inv['type_name']}
-置信度：{inv['probability']}
-发票代码：{inv['invoice_code']}
-发票号码：{inv['invoice_number']}
-金额：{inv['amount']:,.2f} 元
-开票日期：{inv['invoice_date']}
-销售方名称：{inv['seller_name']}
-销售方税号：{inv['seller_tax_id']}
-购买方名称：{inv['buyer_name']}
-购买方税号：{inv['buyer_tax_id']}{id_hint}{date_hint}"""
+    id_hint = f"\n> 发票记录ID：#{inv_id}" if inv_id else ""
+    date_hint = f"\n> **注意：开票日期未能识别，请提供该发票的开票日期（格式：YYYY-MM-DD），以便补录。**" if not inv.get('invoice_date') else ""
+    prob = inv.get('probability', '')
+    prob_str = f"{float(prob)*100:.1f}%" if prob and prob.replace('.','').isdigit() else prob
+    return f"""### 票据识别结果
+
+| 项目 | 内容 |
+|------|------|
+| 票据类型 | {inv['type_name']} |
+| 发票代码 | {inv['invoice_code'] or '—'} |
+| 发票号码 | {inv['invoice_number'] or '—'} |
+| 金额 | {inv['amount']:,.2f} 元 |
+| 开票日期 | {inv['invoice_date'] or '未识别'} |
+| 销售方 | {inv['seller_name'] or '—'} |
+| 购买方 | {inv['buyer_name'] or '—'} |
+| 置信度 | {prob_str or '—'} |{id_hint}{date_hint}"""
 
 
 def _build_invoice_table(invoices, file_label=False):
     lines = []
     for i, inv in enumerate(invoices, 1):
         inv_id = inv.get('invoice_id')
-        id_hint = f"\n发票记录ID：{inv_id}" if inv_id else ""
-        date_hint = f"\n注意：开票日期未能识别，请提供该发票的开票日期（格式：YYYY-MM-DD），以便补录。" if not inv.get('invoice_date') else ""
+        id_hint = f"\n> 发票记录ID：#{inv_id}" if inv_id else ""
+        date_hint = f"\n> **注意：开票日期未能识别，请提供该发票的开票日期（格式：YYYY-MM-DD），以便补录。**" if not inv.get('invoice_date') else ""
+        prob = inv.get('probability', '')
+        prob_str = f"{float(prob)*100:.1f}%" if prob and prob.replace('.','').isdigit() else prob
         if file_label and inv.get('file'):
-            lines.append(f"--- 票据 {i}（文件：{inv['file']}）---")
+            lines.append(f"### 票据 {i}（文件：{inv['file']}）")
         else:
-            lines.append(f"--- 发票 {i} ---")
-        lines.append(f"票据类型：{inv['type_name']}")
-        lines.append(f"置信度：{inv['probability']}")
-        lines.append(f"发票代码：{inv['invoice_code']}")
-        lines.append(f"发票号码：{inv['invoice_number']}")
-        lines.append(f"金额：{inv['amount']:,.2f} 元")
-        lines.append(f"开票日期：{inv['invoice_date']}")
-        lines.append(f"销售方名称：{inv['seller_name']}")
-        lines.append(f"销售方税号：{inv['seller_tax_id']}")
-        lines.append(f"购买方名称：{inv['buyer_name']}")
-        lines.append(f"购买方税号：{inv['buyer_tax_id']}{id_hint}{date_hint}")
+            lines.append(f"### 发票 {i}")
+        lines.append("")
+        lines.append(f"| 项目 | 内容 |")
+        lines.append(f"|------|------|")
+        lines.append(f"| 票据类型 | {inv['type_name']} |")
+        lines.append(f"| 发票代码 | {inv['invoice_code'] or '—'} |")
+        lines.append(f"| 发票号码 | {inv['invoice_number'] or '—'} |")
+        lines.append(f"| 金额 | {inv['amount']:,.2f} 元 |")
+        lines.append(f"| 开票日期 | {inv['invoice_date'] or '未识别'} |")
+        lines.append(f"| 销售方 | {inv['seller_name'] or '—'} |")
+        lines.append(f"| 购买方 | {inv['buyer_name'] or '—'} |")
+        lines.append(f"| 置信度 | {prob_str or '—'} |{id_hint}{date_hint}")
         lines.append("")
     return "\n".join(lines)
 
@@ -283,7 +289,7 @@ def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
             if len(invoices) == 1:
                 return _format_single_invoice(invoices[0])
 
-            return f"该文件共识别出 {len(invoices)} 张发票：\n\n{_build_invoice_table(invoices)}"
+            return f"### 该文件共识别出 {len(invoices)} 张发票\n\n{_build_invoice_table(invoices)}"
         else:
             return "识别结果为空，未检测到票据"
 
@@ -362,11 +368,11 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
         if not r['invoice_date'] and r.get('invoice_id'):
             missing_date_items.append(f"票据 {i + 1}（发票记录ID：{r['invoice_id']}）")
 
-    result_str = f"批量识别结果（共 {len(all_invoices)} 张票据）：\n\n"
+    result_str = f"### 批量识别结果（共 {len(all_invoices)} 张票据）\n\n"
     result_str += _build_invoice_table(all_invoices, file_label=True)
 
     if missing_date_items:
-        result_str += f"\n以下票据缺少开票日期，请提供对应日期（格式：YYYY-MM-DD）：\n"
+        result_str += f"\n**以下票据缺少开票日期，请提供对应日期（格式：YYYY-MM-DD）：**\n"
         for item in missing_date_items:
             result_str += f"- {item}\n"
 

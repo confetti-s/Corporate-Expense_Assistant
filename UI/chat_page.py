@@ -23,6 +23,21 @@ except Exception as e:
     traceback.print_exc()
 
 
+_session_user_id = None
+
+
+def _check_user_switch(user_state):
+    """检测是否切换了账号，如果是则返回True，同时更新_session_user_id"""
+    global _session_user_id
+    current = user_state.get('user_id') if user_state else None
+    if _session_user_id and current and current != _session_user_id:
+        _session_user_id = current
+        return True
+    if current:
+        _session_user_id = current
+    return False
+
+
 # ===================== 对话历史持久化 =====================
 
 def save_chat_message(user_id: str, role: str, content: str, reimbursement_id: int = None):
@@ -73,7 +88,9 @@ def send_greeting(chat_history, user_state):
         yield chat_history or []
         return
 
-    chat_history = chat_history or []
+    yield []
+    _check_user_switch(user_state)
+    chat_history = []
 
     enhanced_message = "你好"
     if user_state:
@@ -148,7 +165,7 @@ def chat_send(message, chat_history, file_uploads, user_state):
         yield "", chat_history or []
         return
 
-    chat_history = chat_history or []
+    chat_history = [] if _check_user_switch(user_state) else (chat_history or [])
 
     enhanced_message = message
 
@@ -248,9 +265,13 @@ def ocr_file_handler(file, chat_history, user_state):
         filename = "文件"
         result = f"识别发票时出错：{str(e)}"
 
-    chat_history = chat_history or []
+    chat_history = [] if _check_user_switch(user_state) else (chat_history or [])
     chat_history.append({"role": "user", "content": f"[上传发票] {filename}"})
     chat_history.append({"role": "assistant", "content": result})
+
+    if user_state and user_state.get('user_id'):
+        save_chat_message(user_state['user_id'], "user", f"[上传发票] {filename}")
+        save_chat_message(user_state['user_id'], "assistant", result)
 
     return chat_history, None
 
@@ -260,7 +281,7 @@ def voucher_file_handler(files, chat_history, user_state):
     if not files:
         return chat_history or [], None
 
-    chat_history = chat_history or []
+    chat_history = [] if _check_user_switch(user_state) else (chat_history or [])
     user_id = user_state['user_id'] if user_state else ""
 
     file_list = files if isinstance(files, list) else [files]
@@ -276,6 +297,10 @@ def voucher_file_handler(files, chat_history, user_state):
 
         chat_history.append({"role": "user", "content": f"[上传凭证] {filename}"})
         chat_history.append({"role": "assistant", "content": result})
+
+        if user_state and user_state.get('user_id'):
+            save_chat_message(user_state['user_id'], "user", f"[上传凭证] {filename}")
+            save_chat_message(user_state['user_id'], "assistant", result)
 
     return chat_history, None
 

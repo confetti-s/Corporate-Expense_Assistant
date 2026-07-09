@@ -283,15 +283,24 @@ def recognize_voucher(file_path: str, uploaded_by: str = "") -> str:
             # 存入Voucher表
             voucher_id = _save_voucher_to_db(voucher_data, file_path=persistent_path, uploaded_by=uploaded_by)
 
-            id_hint = f"\n凭证记录ID：{voucher_id}" if voucher_id else ""
+            ocr_text = voucher_data['ocr_result'][:300]
+            return f"""### 凭证识别结果
 
-            return f"""凭证识别结果：
-凭证类型：{voucher_data['voucher_type']}
-金额：{voucher_data['amount']:,.2f} 元
-交易日期：{voucher_data['payment_date'] or '未识别'}
-收款方：{voucher_data['payee'] or '未识别'}
-OCR原文：
-{voucher_data['ocr_result'][:500]}{id_hint}"""
+| 项目 | 内容 |
+|------|------|
+| 凭证类型 | {voucher_data['voucher_type']} |
+| 金额 | {voucher_data['amount']:,.2f} 元 |
+| 交易日期 | {voucher_data['payment_date'] or '未识别'} |
+| 收款方 | {voucher_data['payee'] or '未识别'} |
+| 凭证编号 | {f'#{voucher_id}' if voucher_id else '—'} |
+
+<details>
+<summary>OCR原文</summary>
+
+```
+{ocr_text}
+```
+</details>"""
         else:
             return "凭证识别结果为空，未检测到文字内容"
 

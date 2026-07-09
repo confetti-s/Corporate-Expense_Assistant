@@ -4,6 +4,8 @@ from src.db.auth import authenticate_user
 from UI.constants import TAB_CHAT
 from UI.utils import _tab_visibility_js
 
+HISTORY_DEFAULT = "点击上方按钮加载历史记录"
+
 
 def do_login(user_id, password):
     user, error = authenticate_user(user_id, password)
@@ -15,11 +17,11 @@ def do_login(user_id, password):
         return (
 
             user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], user, ""
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], user, "", HISTORY_DEFAULT
         )
     return (
         None, gr.update(visible=True), gr.update(visible=False), error,
-        gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(False), [], None, f"❌ {error}"
+        gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(False), [], None, f"❌ {error}", HISTORY_DEFAULT
     )
 
 
@@ -32,7 +34,8 @@ def do_logout(user_state):
         gr.Tabs(selected=TAB_CHAT),
         _tab_visibility_js(False),
         [],
-        None
+        None,
+        HISTORY_DEFAULT
     )
 
 
@@ -45,7 +48,7 @@ def restore_from_storage(stored_user):
         return (
 
             stored_user, gr.Column(visible=False), gr.Column(visible=True), info,
-            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], stored_user
+            gr.Tabs(selected=TAB_CHAT), _tab_visibility_js(is_manager), [], stored_user, HISTORY_DEFAULT
         )
 
     return (
@@ -56,7 +59,8 @@ def restore_from_storage(stored_user):
         gr.Tabs(selected=TAB_CHAT),
         _tab_visibility_js(False),
         [],
-        None
+        None,
+        HISTORY_DEFAULT
     )
 
 
