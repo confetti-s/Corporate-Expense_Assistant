@@ -140,6 +140,22 @@ def _migrate_add_invoice_valid_fields():
         print(f"[MIGRATION WARNING] {e}")
 
 
+def _migrate_add_source_reimbursement_no():
+    try:
+        inspector = inspect(engine)
+        if 'reimbursements' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('reimbursements')]
+        
+        with engine.connect() as conn:
+            if 'source_reimbursement_no' not in existing_columns:
+                conn.execute(text("ALTER TABLE reimbursements ADD COLUMN source_reimbursement_no VARCHAR(32)"))
+                conn.commit()
+                print("[MIGRATION] Added source_reimbursement_no column to reimbursements")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] {e}")
+
+
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
@@ -148,4 +164,5 @@ def init_db():
     _migrate_add_applicant_email()
     _migrate_add_chat_history()
     _migrate_add_invoice_valid_fields()
+    _migrate_add_source_reimbursement_no()
     print("Database initialized successfully")

@@ -35,6 +35,7 @@ class Reimbursements(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     reimbursement_no = Column(String(32), unique=True, nullable=False)
+    source_reimbursement_no = Column(String(32), nullable=True)
     employee_id = Column(String(32), nullable=False)
     employee_name = Column(String(100), nullable=False)
     department_id = Column(String(32), ForeignKey('department_budget.department_id'))

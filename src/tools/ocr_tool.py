@@ -72,6 +72,30 @@ def _extract_field(result_dict, key, default=""):
     return default
 
 
+def _normalize_date(date_str: str) -> str:
+    if not date_str:
+        return ""
+    
+    import re
+    
+    patterns = [
+        r"(\d{4})[年\-/](\d{1,2})[月\-/](\d{1,2})[日号]?",
+        r"(\d{4})[年\-/](\d{1,2})[月\-/](\d{1,2})\s*$",
+        r"(\d{4})(\d{2})(\d{2})",
+        r"(\d{4})\.(\d{1,2})\.(\d{1,2})",
+    ]
+    
+    for pattern in patterns:
+        match = re.match(pattern, date_str.strip())
+        if match:
+            year = match.group(1)
+            month = match.group(2).zfill(2)
+            day = match.group(3).zfill(2)
+            return f"{year}-{month}-{day}"
+    
+    return ""
+
+
 def _persist_file(src_path: str, subdir: str) -> str:
     if not src_path or not os.path.exists(src_path):
         return src_path
@@ -130,7 +154,7 @@ def parse_invoice_result(result):
     else:
         invoice_code = raw_code
         invoice_number = raw_number
-    invoice_date = _extract_field(invoice_result, "InvoiceDate")
+    invoice_date = _normalize_date(_extract_field(invoice_result, "InvoiceDate"))
     seller_name = _extract_field(invoice_result, "SellerName")
     seller_tax_id = _extract_field(invoice_result, "SellerRegisterNum")
     buyer_name = _extract_field(invoice_result, "PurchaserName")
@@ -362,9 +386,13 @@ def update_invoice_date(invoice_id: int, invoice_date: str) -> str:
         if not invoice:
             return f"错误：未找到发票记录ID为 {invoice_id} 的发票"
 
-        invoice.invoice_date = invoice_date
+        normalized_date = _normalize_date(invoice_date)
+        if not normalized_date:
+            return f"错误：日期格式不正确，请输入以下格式之一：\n- YYYY年MM月DD日（如2026年05月05日）\n- YYYY-MM-DD（如2026-05-05）\n- YYYY/MM/DD（如2026/05/05）\n- YYYYMMDD（如20260505）"
+
+        invoice.invoice_date = normalized_date
         db.commit()
-        return f"成功：发票记录ID {invoice_id} 的开票日期已更新为 {invoice_date}"
+        return f"成功：发票记录ID {invoice_id} 的开票日期已更新为 {normalized_date}"
     except Exception as e:
         db.rollback()
         return f"更新失败：{str(e)}"
