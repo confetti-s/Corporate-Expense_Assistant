@@ -45,6 +45,7 @@ class Reimbursements(Base):
     status = Column(String(20), default='pending')
     need_special_approval = Column(Boolean, default=False)
     invoice_details = Column(Text, default=None)
+    ai_suggestion = Column(Text, default=None)
     applicant_email = Column(String(100))
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

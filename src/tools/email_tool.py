@@ -66,7 +66,6 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
         if not reimb:
             return f"未找到报销单 {reimbursement_no}"
 
-        # 查找该部门第一级审批人
         approver_rec = db.query(DepartmentApprover).filter_by(
             department_id=reimb.department_id,
             approval_level=1
@@ -74,10 +73,13 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
         if not approver_rec:
             return f"部门 {reimb.department_id} 未配置第一级审批人"
 
-        # 查找审批人邮箱
         approver_user = db.query(User).filter_by(user_id=approver_rec.approver_id).first()
         if not approver_user or not approver_user.email:
             return f"审批人 {approver_rec.approver_name}（{approver_rec.approver_id}）未设置邮箱"
+
+        ai_suggestion_text = ""
+        if reimb.ai_suggestion:
+            ai_suggestion_text = f"\n\nAI审核建议：\n{reimb.ai_suggestion}"
 
         subject = f"【报销审批通知】{reimb.employee_name}-{reimb.expense_type}报销单{reimbursement_no}待审批"
         body = (
@@ -87,7 +89,8 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
             f"部门：{reimb.department_id}\n"
             f"费用类型：{reimb.expense_type}\n"
             f"金额：{reimb.total_amount:,.2f} 元\n"
-            f"说明：{reimb.description or '无'}\n\n"
+            f"说明：{reimb.description or '无'}\n"
+            f"{ai_suggestion_text}\n\n"
             f"请及时登录系统进行审批。"
         )
 

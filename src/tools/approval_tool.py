@@ -179,6 +179,11 @@ def approve_or_reject_reimbursement(
             reimbursement.updated_at = datetime.now()
             db.commit()
 
+            # 重新查询报销单对象，确保它仍然绑定到会话
+            reimbursement = db.query(Reimbursements).filter_by(
+                reimbursement_no=reimbursement_no
+            ).first()
+
             # 审批驳回后发邮件通知申请人
             _send_notification_email(db, reimbursement, "rejected", approver_name, comment)
 
@@ -222,6 +227,11 @@ def approve_or_reject_reimbursement(
         # 更新所有部门预算使用情况
         update_budget_spent()
 
+        # 重新查询报销单对象，确保它仍然绑定到会话
+        reimbursement = db.query(Reimbursements).filter_by(
+            reimbursement_no=reimbursement_no
+        ).first()
+
         # 审批通过后发邮件通知申请人
         _send_notification_email(db, reimbursement, "approved", approver_name, comment)
 
@@ -251,15 +261,21 @@ def _send_notification_email(db, reimbursement, action, approver_name, comment):
     except Exception:
         return
 
-    if not reimbursement.applicant_email:
-        print(f"[邮件通知] 申请人 {reimbursement.employee_name}({reimbursement.employee_id}) 无邮箱，跳过发送")
-        return
+    to_email = reimbursement.applicant_email
+    if not to_email:
+        user = db.query(User).filter_by(user_id=reimbursement.employee_id).first()
+        if user and user.email:
+            to_email = user.email
+            print(f"[邮件通知] 从用户表获取申请人邮箱：{to_email}")
+        else:
+            print(f"[邮件通知] 申请人 {reimbursement.employee_name}({reimbursement.employee_id}) 无邮箱，跳过发送")
+            return
 
     try:
         from src.tools.email_tool import send_email
         action_text = "通过" if action == "approved" else "驳回"
-        send_email.func(
-            to_email=reimbursement.applicant_email,
+        result = send_email.func(
+            to_email=to_email,
             subject=f"报销单{reimbursement.reimbursement_no}审批{action_text}",
             body=(
                 f"您的报销单 {reimbursement.reimbursement_no} 已被{action_text}。\n"
@@ -269,6 +285,10 @@ def _send_notification_email(db, reimbursement, action, approver_name, comment):
                 f"审批意见：{comment or '无'}"
             )
         )
+        if "失败" in result:
+            print(f"[邮件通知失败] {result}")
+        else:
+            print(f"[邮件通知成功] 已发送给 {to_email}")
     except Exception as e:
         print(f"[邮件通知失败] {e}")
 

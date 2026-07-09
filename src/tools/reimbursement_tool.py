@@ -352,16 +352,39 @@ def _create_approval_records(db, reimbursement):
     return None
 
 
+def _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message):
+    valid_count = len(valid_invoices)
+    invalid_count = len(invalid_invoices)
+    total_amount = reimbursement.total_amount if reimbursement else sum(inv.amount for inv in valid_invoices) + sum(inv.amount for inv in invalid_invoices)
+    
+    if valid_count == 0:
+        suggestion = f"【AI建议：驳回】\n理由：\n  - 所有发票均不合规（共{invalid_count}张）\n"
+        for inv in invalid_invoices:
+            suggestion += f"    * 发票ID{inv.id}：{inv.invalid_reason}\n"
+    elif invalid_count == 0 and budget_sufficient:
+        if total_amount <= 1000:
+            suggestion = f"【AI建议：通过】\n理由：\n  - 所有发票均合规（共{valid_count}张）\n  - 部门预算充足\n  - 金额{total_amount:,.2f}元≤1000元，符合快速审批条件\n"
+        else:
+            suggestion = f"【AI建议：通过】\n理由：\n  - 所有发票均合规（共{valid_count}张）\n  - 部门预算充足\n  - 金额{total_amount:,.2f}元>1000元，需按金额对应审批级别处理\n"
+    elif invalid_count > 0 and budget_sufficient:
+        suggestion = f"【AI建议：谨慎审批】\n理由：\n  - 合规发票{valid_count}张，不合规发票{invalid_count}张\n  - 部门预算充足\n  - 建议仔细审核不合规发票的具体原因\n"
+        for inv in invalid_invoices:
+            suggestion += f"    * 发票ID{inv.id}：{inv.invalid_reason}\n"
+    else:
+        suggestion = f"【AI建议：谨慎审批】\n理由：\n  - {budget_message}\n  - 合规发票{valid_count}张，不合规发票{invalid_count}张\n"
+    
+    return suggestion
+
+
 @tool("提交审批")
 def submit_for_approval(reimbursement_no: str) -> str:
     """
     将草稿或已驳回的报销单提交至审批流程
-    智能拆分逻辑：
-    - 所有发票合规 + 预算充足 + 金额≤1000元：AI自动通过
-    - 所有发票合规 + 预算充足 + 金额>1000元：走原有审批流
-    - 部分合规：合规发票合并新建报销单（自动通过），每张不合规发票单独新建报销单（走人工审批）
-    - 全部不合规：每张发票各新建报销单（走人工审批）
-    - 预算不足：全部进入人工审批
+    AI智能拆分与建议逻辑：
+    - 所有发票合规 + 预算充足：AI建议通过，交由审批人最终决策
+    - 部分合规：合规发票合并新建报销单，每张不合规发票单独新建报销单，AI提供建议供审批人参考
+    - 全部不合规：每张发票各新建报销单，AI建议驳回
+    - 预算不足：全部进入人工审批，AI提示预算情况
     :param reimbursement_no: 报销单号，如 RB20260016
     """
     db = SessionLocal()
@@ -392,13 +415,13 @@ def submit_for_approval(reimbursement_no: str) -> str:
         budget_sufficient, budget_message = _check_budget_internal(db, reimbursement.department_id, total_with_vouchers)
         
         created_reimbursements = []
-        auto_approved_nos = []
-        manual_approval_nos = []
-        auto_approved_reimbursements = []
+        pending_approval_nos = []
         
         if valid_invoices and budget_sufficient:
             if total_with_vouchers <= 1000 and not invalid_invoices:
+                ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message)
                 reimbursement.status = "pending"
+                reimbursement.ai_suggestion = ai_suggestion
                 reimbursement.updated_at = datetime.now()
                 
                 error = _create_approval_records(db, reimbursement)
@@ -406,21 +429,21 @@ def submit_for_approval(reimbursement_no: str) -> str:
                     db.rollback()
                     return error
                 
-                _auto_approve_reimbursement(db, reimbursement)
-                
                 db.commit()
                 
-                _send_ai_approval_email(db, reimbursement.reimbursement_no)
+                try:
+                    from src.tools.email_tool import notify_approver
+                    notify_approver.func(reimbursement_no=reimbursement.reimbursement_no)
+                except Exception as e:
+                    print(f"[通知审批人失败] {reimbursement.reimbursement_no}: {e}")
                 
-                from src.tools.budget_tool import update_budget_spent
-                update_budget_spent()
-                
-                auto_approved_nos.append(reimbursement.reimbursement_no)
+                pending_approval_nos.append(reimbursement.reimbursement_no)
                 created_reimbursements.append({
                     "no": reimbursement.reimbursement_no,
                     "amount": total_with_vouchers,
-                    "status": "AI自动通过",
-                    "type": "原报销单"
+                    "status": "待人工审批",
+                    "type": "原报销单",
+                    "ai_suggestion": ai_suggestion
                 })
             elif total_with_vouchers <= 1000 and invalid_invoices:
                 reimbursement.status = "split"
@@ -442,6 +465,7 @@ def submit_for_approval(reimbursement_no: str) -> str:
                     status="pending",
                     need_special_approval=False,
                     invoice_details=compliant_invoice_details,
+                    ai_suggestion=_build_ai_suggestion(db, None, valid_invoices, [], budget_sufficient, budget_message),
                     applicant_email=reimbursement.applicant_email,
                     created_at=datetime.now(),
                     updated_at=datetime.now()
@@ -462,16 +486,13 @@ def submit_for_approval(reimbursement_no: str) -> str:
                     db.rollback()
                     return error
                 
-                _auto_approve_reimbursement(db, compliant_reimb)
-                
-                auto_approved_reimbursements.append(compliant_reimb)
-                
-                auto_approved_nos.append(compliant_no)
+                pending_approval_nos.append(compliant_no)
                 created_reimbursements.append({
                     "no": compliant_no,
                     "amount": total_with_vouchers,
-                    "status": "AI自动通过",
-                    "type": "合规发票合并"
+                    "status": "待人工审批",
+                    "type": "合规发票合并",
+                    "ai_suggestion": compliant_reimb.ai_suggestion
                 })
                 
                 for inv in invalid_invoices:
@@ -490,6 +511,7 @@ def submit_for_approval(reimbursement_no: str) -> str:
                         status="pending",
                         need_special_approval=True,
                         invoice_details=inv_invoice_details,
+                        ai_suggestion=_build_ai_suggestion(db, None, [], [inv], budget_sufficient, budget_message),
                         applicant_email=reimbursement.applicant_email,
                         created_at=datetime.now(),
                         updated_at=datetime.now()
@@ -505,29 +527,27 @@ def submit_for_approval(reimbursement_no: str) -> str:
                         db.rollback()
                         return error
                     
-                    manual_approval_nos.append(inv_no)
+                    pending_approval_nos.append(inv_no)
                     created_reimbursements.append({
                         "no": inv_no,
                         "amount": inv.amount,
                         "status": "待人工审批",
-                        "type": f"不合规发票（{inv.invalid_reason}）"
+                        "type": f"不合规发票（{inv.invalid_reason}）",
+                        "ai_suggestion": invalid_reimb.ai_suggestion
                     })
                 
                 db.commit()
                 
-                _send_ai_approval_email(db, compliant_no)
-                
-                from src.tools.budget_tool import update_budget_spent
-                update_budget_spent()
-                
-                for inv_no in manual_approval_nos:
+                for pending_no in pending_approval_nos:
                     try:
                         from src.tools.email_tool import notify_approver
-                        notify_approver.func(reimbursement_no=inv_no)
+                        notify_approver.func(reimbursement_no=pending_no)
                     except Exception as e:
-                        print(f"[通知审批人失败] {inv_no}: {e}")
+                        print(f"[通知审批人失败] {pending_no}: {e}")
             else:
+                ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message)
                 reimbursement.status = "pending"
+                reimbursement.ai_suggestion = ai_suggestion
                 reimbursement.updated_at = datetime.now()
                 
                 error = _create_approval_records(db, reimbursement)
@@ -543,15 +563,18 @@ def submit_for_approval(reimbursement_no: str) -> str:
                 except Exception as e:
                     print(f"[通知审批人失败] {reimbursement.reimbursement_no}: {e}")
                 
-                manual_approval_nos.append(reimbursement.reimbursement_no)
+                pending_approval_nos.append(reimbursement.reimbursement_no)
                 created_reimbursements.append({
                     "no": reimbursement.reimbursement_no,
                     "amount": total_with_vouchers,
                     "status": "待人工审批",
-                    "type": "原报销单（金额>1000元）"
+                    "type": "原报销单（金额>1000元）",
+                    "ai_suggestion": ai_suggestion
                 })
         elif valid_invoices and not budget_sufficient:
+            ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message)
             reimbursement.status = "pending"
+            reimbursement.ai_suggestion = ai_suggestion
             reimbursement.updated_at = datetime.now()
             
             error = _create_approval_records(db, reimbursement)
@@ -567,12 +590,13 @@ def submit_for_approval(reimbursement_no: str) -> str:
             except Exception as e:
                 print(f"[通知审批人失败] {reimbursement.reimbursement_no}: {e}")
             
-            manual_approval_nos.append(reimbursement.reimbursement_no)
+            pending_approval_nos.append(reimbursement.reimbursement_no)
             created_reimbursements.append({
                 "no": reimbursement.reimbursement_no,
                 "amount": total_with_vouchers,
                 "status": "待人工审批",
-                "type": f"原报销单（{budget_message}）"
+                "type": f"原报销单（{budget_message}）",
+                "ai_suggestion": ai_suggestion
             })
         else:
             reimbursement.status = "split"
@@ -594,6 +618,7 @@ def submit_for_approval(reimbursement_no: str) -> str:
                     status="pending",
                     need_special_approval=True,
                     invoice_details=inv_invoice_details,
+                    ai_suggestion=_build_ai_suggestion(db, None, [], [inv], budget_sufficient, budget_message),
                     applicant_email=reimbursement.applicant_email,
                     created_at=datetime.now(),
                     updated_at=datetime.now()
@@ -609,38 +634,33 @@ def submit_for_approval(reimbursement_no: str) -> str:
                     db.rollback()
                     return error
                 
-                manual_approval_nos.append(inv_no)
+                pending_approval_nos.append(inv_no)
                 created_reimbursements.append({
                     "no": inv_no,
                     "amount": inv.amount,
                     "status": "待人工审批",
-                    "type": f"不合规发票（{inv.invalid_reason}）"
+                    "type": f"不合规发票（{inv.invalid_reason}）",
+                    "ai_suggestion": invalid_reimb.ai_suggestion
                 })
             
             db.commit()
-        
-        if manual_approval_nos and not auto_approved_nos:
-            for inv_no in manual_approval_nos:
+            
+            for pending_no in pending_approval_nos:
                 try:
                     from src.tools.email_tool import notify_approver
-                    notify_approver.func(reimbursement_no=inv_no)
+                    notify_approver.func(reimbursement_no=pending_no)
                 except Exception as e:
-                    print(f"[通知审批人失败] {inv_no}: {e}")
+                    print(f"[通知审批人失败] {pending_no}: {e}")
         
         result = f"报销单 {reimbursement_no} 提交处理完成！\n\n"
         
-        if auto_approved_nos:
-            result += f"🎉 AI自动通过（{len(auto_approved_nos)} 张）：\n"
-            for item in created_reimbursements:
-                if item["status"] == "AI自动通过":
-                    result += f"  - {item['no']}：{item['amount']:,.2f}元（{item['type']}）\n"
-            result += "\n"
-        
-        if manual_approval_nos:
-            result += f"📋 待人工审批（{len(manual_approval_nos)} 张）：\n"
+        if pending_approval_nos:
+            result += f"📋 待人工审批（{len(pending_approval_nos)} 张）：\n"
             for item in created_reimbursements:
                 if item["status"] == "待人工审批":
                     result += f"  - {item['no']}：{item['amount']:,.2f}元（{item['type']}）\n"
+                    if item.get("ai_suggestion"):
+                        result += f"    AI建议：{item['ai_suggestion'].split('】')[0]}】\n"
             result += "\n"
         
         if reimbursement.status == "split":
