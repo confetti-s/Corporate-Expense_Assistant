@@ -106,18 +106,46 @@ def _migrate_add_chat_history():
                     CREATE TABLE chat_history (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         user_id VARCHAR(32) NOT NULL,
+                        session_id VARCHAR(64),
                         role VARCHAR(20) NOT NULL,
                         content TEXT NOT NULL,
                         reimbursement_id INTEGER NULL,
                         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                     )
                 """))
-                conn.execute(text("CREATE INDEX idx_chat_user_id ON chat_history(user_id)"))
+                conn.execute(text("CREATE INDEX idx_chat_user_session ON chat_history(user_id, session_id)"))
                 conn.execute(text("CREATE INDEX idx_chat_created_at ON chat_history(created_at)"))
                 conn.commit()
-            print("[MIGRATION] Created chat_history table")
+            print("[MIGRATION] Created chat_history table with session_id and composite index")
     except Exception as e:
         print(f"[MIGRATION WARNING] chat_history migration failed: {e}")
+
+
+def _migrate_add_session_id():
+    """为已有的 chat_history 表新增 session_id 列和联合索引"""
+    try:
+        inspector = inspect(engine)
+        if 'chat_history' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('chat_history')]
+        with engine.connect() as conn:
+            if 'session_id' not in existing_columns:
+                conn.execute(text("ALTER TABLE chat_history ADD COLUMN session_id VARCHAR(64)"))
+                print("[MIGRATION] Added session_id column to chat_history")
+            conn.commit()
+        # 确保联合索引存在
+        indexes = inspector.get_indexes('chat_history')
+        has_composite = any(
+            set(idx.get('column_names', [])) == {'user_id', 'session_id'}
+            for idx in indexes
+        )
+        if not has_composite:
+            with engine.connect() as conn:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_chat_user_session ON chat_history(user_id, session_id)"))
+                conn.commit()
+            print("[MIGRATION] Added composite index on (user_id, session_id)")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] add_session_id: {e}")
 
 def _migrate_add_invoice_valid_fields():
     try:
@@ -163,6 +191,7 @@ def init_db():
     _migrate_add_invoice_details()
     _migrate_add_applicant_email()
     _migrate_add_chat_history()
+    _migrate_add_session_id()
     _migrate_add_invoice_valid_fields()
     _migrate_add_source_reimbursement_no()
     print("Database initialized successfully")

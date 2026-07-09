@@ -1,3 +1,4 @@
+import uuid
 import gradio as gr
 
 from src.db.auth import authenticate_user
@@ -10,6 +11,7 @@ HISTORY_DEFAULT = "点击上方按钮加载历史记录"
 def do_login(user_id, password):
     user, error = authenticate_user(user_id, password)
     if user:
+        user['session_id'] = uuid.uuid4().hex  # 每次登录生成全新会话ID
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[user["role"]]
         info = f"当前用户：**{user['name']}** ({user['user_id']}) | 角色：{role_text} | 部门：{user['department_id'] or '无'}"
         is_manager = user["role"] in ("manager", "admin")
@@ -41,6 +43,8 @@ def do_logout(user_state):
 
 def restore_from_storage(stored_user):
     if stored_user and isinstance(stored_user, dict) and stored_user.get('user_id'):
+        if 'session_id' not in stored_user:
+            stored_user['session_id'] = uuid.uuid4().hex  # 旧数据兼容：无session_id时生成新的
         role_text = {"employee": "员工", "manager": "经理", "admin": "管理员"}[stored_user["role"]]
         info = f"当前用户：**{stored_user['name']}** ({stored_user['user_id']}) | 角色：{role_text} | 部门：{stored_user['department_id'] or '无'}"
         is_manager = stored_user["role"] in ("manager", "admin")
