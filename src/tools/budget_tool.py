@@ -2,6 +2,7 @@ from langchain.tools import tool
 from src.db.database import SessionLocal
 from src.db.models import DepartmentBudget, Reimbursements
 from sqlalchemy import func
+from datetime import datetime
 
 @tool("查询部门预算")
 def query_department_budget(department_id: str) -> str:
@@ -91,5 +92,29 @@ def get_all_department_budgets() -> str:
 """
         
         return result
+    finally:
+        db.close()
+
+
+def update_budget_spent():
+    """
+    根据已审批通过的报销单金额，更新所有部门的预算使用情况
+    将各部门已审批通过的报销总额写入 spent_amount，计算并更新 remaining_amount
+    """
+    db = SessionLocal()
+    try:
+        departments = db.query(DepartmentBudget).all()
+        for dept in departments:
+            spent = db.query(func.sum(Reimbursements.total_amount)).filter(
+                Reimbursements.department_id == dept.department_id,
+                Reimbursements.status == "approved"
+            ).scalar() or 0.0
+            dept.spent_amount = spent
+            dept.remaining_amount = dept.budget_amount - spent
+            dept.updated_at = datetime.now()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[预算更新失败] {e}")
     finally:
         db.close()

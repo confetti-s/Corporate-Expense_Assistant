@@ -3,6 +3,7 @@ from src.db.database import SessionLocal
 from src.db.models import Reimbursements, ApprovalRecords, DepartmentBudget, User
 from datetime import datetime, timedelta
 from sqlalchemy import func
+from src.tools.budget_tool import update_budget_spent
 
 
 @tool("查询待审批记录")
@@ -216,20 +217,10 @@ def approve_or_reject_reimbursement(
         reimbursement.status = "approved"
         reimbursement.updated_at = datetime.now()
 
-        # 更新部门预算
-        dept = db.query(DepartmentBudget).filter_by(
-            department_id=reimbursement.department_id
-        ).first()
-        if dept:
-            approved_total = db.query(func.sum(Reimbursements.total_amount)).filter_by(
-                department_id=reimbursement.department_id,
-                status="approved"
-            ).scalar() or 0
-            dept.spent_amount = approved_total
-            dept.remaining_amount = dept.budget_amount - approved_total
-            dept.updated_at = datetime.now()
-
         db.commit()
+
+        # 更新所有部门预算使用情况
+        update_budget_spent()
 
         # 审批通过后发邮件通知申请人
         _send_notification_email(db, reimbursement, "approved", approver_name, comment)
