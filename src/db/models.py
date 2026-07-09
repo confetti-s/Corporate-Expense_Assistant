@@ -13,7 +13,7 @@ class User(Base):
     user_id = Column(String(32), unique=True, nullable=False)
     username = Column(String(50), unique=True, nullable=False)
     password_hash = Column(String(128), nullable=False)
-    role = Column(String(20), nullable=False, default='employee')  # employee / manager / admin
+    role = Column(String(20), nullable=False, default='employee')  # employee / manager / director / general_manager / admin
     name = Column(String(100), nullable=False)
     email = Column(String(100),nullable=False)
     department_id = Column(String(32), ForeignKey('department_budget.department_id'))
@@ -76,6 +76,8 @@ class Invoice(Base):
     uploaded_by = Column(String(32), ForeignKey('users.user_id'))
     reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
     reimbursement_no = Column(String(32), nullable=True)
+    sub_expense_type = Column(String(50), nullable=True)  # 费用小分类，如 出差交通、住宿、餐补、餐饮、礼品 等
+    description = Column(String(500), nullable=True)  # 票据描述，按类型规范填写，如住宿写入住/退房日期和房型，火车票写出发地/目的地/座位
     is_valid = Column(Boolean, default=True)
     invalid_reason = Column(String(200))
     created_at = Column(DateTime, default=datetime.now)
@@ -99,6 +101,7 @@ class Voucher(Base):
     uploaded_by = Column(String(32), ForeignKey('users.user_id'))
     reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
     reimbursement_no = Column(String(32), nullable=True)
+    sub_expense_type = Column(String(50), nullable=True)  # 费用小分类，如 出差交通、住宿、餐补、餐饮、礼品 等
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

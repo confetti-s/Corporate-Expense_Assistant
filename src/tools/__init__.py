@@ -1,6 +1,6 @@
 from src.tools.budget_tool import query_department_budget, check_budget_sufficient, get_all_department_budgets
 from src.tools.progress_tool import query_reimbursement_progress, query_reimbursements_by_date
-from src.tools.compliance_tool import compliance_check, calculate_total_amount, get_expense_policy
+from src.tools.compliance_tool import compliance_check, calculate_total_amount, get_expense_policy, update_invoice_description
 from src.tools.ocr_tool import ocr_invoice, batch_ocr_invoices, update_invoice_date
 from src.tools.voucher_tool import recognize_voucher
 from src.tools.pdf_tool import generate_reimbursement_pdf
@@ -17,6 +17,7 @@ ALL_TOOLS = [
     compliance_check,
     calculate_total_amount,
     get_expense_policy,
+    update_invoice_description,
     ocr_invoice,
     batch_ocr_invoices,
     update_invoice_date,
