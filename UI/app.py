@@ -51,12 +51,12 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             reg_email = gr.Textbox(label="邮箱", placeholder="如 zhangsan@example.com")
             reg_dept = gr.Dropdown(
                 label="部门",
-                choices=["D001", "D002", "D003", "D004", "D005"],
+                choices=["D001", "D002", "D003", "D004", "D005", "D006"],
                 value="D001"
             )
             reg_role = gr.Dropdown(
                 label="角色",
-                choices=[("员工", "employee"), ("经理", "manager")],
+                choices=[("员工", "employee"), ("部门经理", "manager"), ("总监", "director"), ("总经理", "general_manager")],
                 value="employee",
             )
             reg_btn = gr.Button("注册", variant="secondary")
