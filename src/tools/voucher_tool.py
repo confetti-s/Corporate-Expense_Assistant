@@ -78,15 +78,131 @@ def _extract_payee_from_text(text: str) -> str:
     return ""
 
 
+def _build_kv_by_position(words_result: list) -> dict:
+    """利用位置信息构建键值对：同一行(上下接近)的文字视为key-value对"""
+    items = []
+    for w in words_result:
+        loc = w.get("location", {})
+        items.append({
+            "text": w.get("words", ""),
+            "left": loc.get("left", 0),
+            "top": loc.get("top", 0),
+            "width": loc.get("width", 0),
+            "height": loc.get("height", 0),
+        })
+
+    # 按top排序，再按left排序，模拟从上到下从左到右阅读
+    items.sort(key=lambda x: (x["top"], x["left"]))
+
+    # 将top接近的文字归为同一行（容差=高度的0.6倍）
+    lines = []
+    current_line = []
+    for item in items:
+        if not current_line:
+            current_line.append(item)
+        else:
+            avg_top = sum(it["top"] for it in current_line) / len(current_line)
+            avg_height = sum(it["height"] for it in current_line) / len(current_line) or 20
+            if abs(item["top"] - avg_top) < avg_height * 0.6:
+                current_line.append(item)
+            else:
+                lines.append(sorted(current_line, key=lambda x: x["left"]))
+                current_line = [item]
+    if current_line:
+        lines.append(sorted(current_line, key=lambda x: x["left"]))
+
+    # 从行中提取键值对：左侧文字为key，右侧文字为value
+    kv = {}
+    for line in lines:
+        if len(line) == 1:
+            continue
+        # 取最左边的作为key，其余拼接为value
+        key = line[0]["text"].strip().rstrip("：:：")
+        value = "".join(it["text"] for it in line[1:]).strip()
+        if key and value:
+            kv[key] = value
+    return kv
+
+
 def _parse_voucher_result(ocr_result: dict) -> dict:
-    """解析百度通用文字识别API结果，提取凭证信息"""
+    """解析百度通用文字识别（含位置版）API结果，利用位置信息提取凭证字段"""
     words_result = ocr_result.get("words_result", [])
     full_text = "\n".join([item.get("words", "") for item in words_result])
 
-    amount = _extract_amount_from_text(full_text)
-    payment_date = _extract_date_from_text(full_text)
-    payee = _extract_payee_from_text(full_text)
+    # 利用位置信息构建键值对
+    kv = _build_kv_by_position(words_result)
 
+    # 构建格式化的OCR原文：键值对每类一行，单独行保留
+    lines_kv = []
+    used_texts = set()
+    for key, value in kv.items():
+        lines_kv.append(f"{key}：{value}")
+        used_texts.add(key)
+        used_texts.add(value)
+
+    # 找出未被kv配对的独立行（如标题、金额等）
+    items = []
+    for w in words_result:
+        text = w.get("words", "").strip()
+        loc = w.get("location", {})
+        items.append({"text": text, "top": loc.get("top", 0), "left": loc.get("left", 0)})
+    items.sort(key=lambda x: (x["top"], x["left"]))
+
+    single_lines = []
+    current_line_texts = []
+    current_top = None
+    for it in items:
+        if current_top is None or abs(it["top"] - current_top) < 15:
+            current_line_texts.append(it["text"])
+            if current_top is None:
+                current_top = it["top"]
+        else:
+            full_line = "".join(current_line_texts).strip()
+            if full_line and full_line not in used_texts:
+                single_lines.append(full_line)
+            current_line_texts = [it["text"]]
+            current_top = it["top"]
+    if current_line_texts:
+        full_line = "".join(current_line_texts).strip()
+        if full_line and full_line not in used_texts:
+            single_lines.append(full_line)
+
+    formatted_text = "\n".join(single_lines + [""] + lines_kv) if lines_kv else full_text
+
+    # 提取金额：优先从键值对中找，再从原文正则匹配
+    amount = 0.0
+    for key in ["金额", "支付金额", "实付金额", "交易金额", "付款金额"]:
+        if key in kv:
+            try:
+                amount = abs(float(kv[key].replace(",", "").replace("￥", "").replace("¥", "").replace("元", "").strip()))
+                break
+            except ValueError:
+                continue
+    if amount == 0.0:
+        amount = _extract_amount_from_text(full_text)
+
+    # 提取日期：优先从键值对找
+    payment_date = ""
+    for key in ["支付时间", "交易时间", "转账时间", "付款时间", "交易日期", "日期"]:
+        if key in kv:
+            date_str = kv[key]
+            m = re.search(r'(\d{4})[年/\-\.](\d{1,2})[月/\-\.](\d{1,2})', date_str)
+            if m:
+                payment_date = f"{m.group(1)}-{m.group(2).zfill(2)}-{m.group(3).zfill(2)}"
+                break
+    if not payment_date:
+        payment_date = _extract_date_from_text(full_text)
+
+    # 提取收款方：优先从键值对找
+    payee = ""
+    for key in ["商户全称", "收款方", "收款人", "对方", "付款给", "转给"]:
+        if key in kv:
+            payee = kv[key].strip()[:50]
+            break
+    if not payee:
+        payee = _extract_payee_from_text(full_text)
+
+    # 凭证类型判断
     if "微信" in full_text or "WeChat" in full_text or "零钱" in full_text or "财付通" in full_text:
         voucher_type = "微信付款截图"
     elif "支付宝" in full_text or "Alipay" in full_text or "花呗" in full_text:
@@ -104,7 +220,7 @@ def _parse_voucher_result(ocr_result: dict) -> dict:
         "payment_date": payment_date,
         "payee": payee,
         "description": "",
-        "ocr_result": full_text,
+        "ocr_result": formatted_text,
     }
 
 
