@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", ".*HTTP_422_UNPROCESSABLE_ENTITY.*")
+
 import gradio as gr
 import matplotlib.pyplot as plt
 import io
