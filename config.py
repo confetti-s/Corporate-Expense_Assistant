@@ -5,7 +5,7 @@ load_dotenv()
 
 DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY")
 WORKSPACE_ID = os.getenv("WORKSPACE_ID")
-MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-v4-flash")
+MODEL_NAME = os.getenv("MODEL_NAME", "deepseek-v4-pro")
 
 BAIDU_OCR_API_KEY = os.getenv("BAIDU_OCR_API_KEY")
 BAIDU_OCR_SECRET_KEY = os.getenv("BAIDU_OCR_SECRET_KEY")
@@ -23,8 +23,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///data/expense.db")
 WORK_ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(WORK_ROOT, "data")
 OUTPUTS_DIR = os.path.join(WORK_ROOT, "outputs")
+UPLOADS_DIR = os.path.join(WORK_ROOT, "uploads")
 
-for dir_path in [DATA_DIR, OUTPUTS_DIR]:
+for dir_path in [DATA_DIR, OUTPUTS_DIR, UPLOADS_DIR]:
     os.makedirs(dir_path, exist_ok=True)
 
 SYSTEM_PROMPT_FILE = "system_prompt.md"
@@ -33,6 +34,7 @@ ALIBABA_MAAS_BASE_URL = f"https://{WORKSPACE_ID}.cn-beijing.maas.aliyuncs.com/co
 
 BAIDU_OCR_TOKEN_URL = "https://aip.baidubce.com/oauth/2.0/token"
 BAIDU_OCR_API_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/multiple_invoice"
+BAIDU_GENERAL_OCR_API_URL = "https://aip.baidubce.com/rest/2.0/ocr/v1/general_basic"
 
 def check_config():
     errors = []

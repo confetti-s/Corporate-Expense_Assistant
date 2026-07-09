@@ -13,7 +13,7 @@ seed_main()
 from UI.constants import CUSTOM_CSS, TAB_CHAT, TAB_BUDGET, TAB_PROGRESS, TAB_APPROVAL
 from UI.chat_page import (
     agent_available, chat_send, ocr_file_handler, clear_chat,
-    load_full_chat_history, send_greeting
+    load_full_chat_history, send_greeting, voucher_file_handler
 )
 from UI.budget_page import update_budget
 from UI.progress_page import (
@@ -111,6 +111,13 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                                 show_label=False,
                                 scale=4
                             )
+                            voucher_input = gr.File(
+                                label="上传凭证",
+                                file_types=[".jpg", ".jpeg", ".png", ".bmp"],
+                                file_count="single",
+                                scale=1,
+                                min_width=100
+                            )
                             send_btn = gr.Button("发送", variant="primary", scale=1)
 
                         with gr.Accordion("查看历史聊天", open=False):
@@ -131,6 +138,11 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                     fn=ocr_file_handler,
                     inputs=[file_input, chatbot_display, user_state],
                     outputs=[chatbot_display, file_input]
+                )
+                voucher_input.change(
+                    fn=voucher_file_handler,
+                    inputs=[voucher_input, chatbot_display, user_state],
+                    outputs=[chatbot_display, voucher_input]
                 )
                 clear_btn.click(
                     fn=clear_chat,

@@ -3,7 +3,8 @@ import requests
 import base64
 import json
 import os
-from config import BAIDU_OCR_API_KEY, BAIDU_OCR_SECRET_KEY, BAIDU_OCR_TOKEN_URL, BAIDU_OCR_API_URL
+import shutil
+from config import BAIDU_OCR_API_KEY, BAIDU_OCR_SECRET_KEY, BAIDU_OCR_TOKEN_URL, BAIDU_OCR_API_URL, UPLOADS_DIR
 from src.db.database import SessionLocal
 from src.db.models import Invoice
 
@@ -72,6 +73,19 @@ def _extract_field(result_dict, key, default=""):
     if isinstance(val, str):
         return val
     return default
+
+
+def _persist_file(src_path: str, subdir: str) -> str:
+    """将Gradio临时文件复制到持久化目录，返回持久路径"""
+    if not src_path or not os.path.exists(src_path):
+        return src_path
+    dest_dir = os.path.join(UPLOADS_DIR, subdir)
+    os.makedirs(dest_dir, exist_ok=True)
+    filename = os.path.basename(src_path)
+    dest_path = os.path.join(dest_dir, filename)
+    if os.path.abspath(src_path) != os.path.abspath(dest_path):
+        shutil.copy2(src_path, dest_path)
+    return dest_path
 
 
 def _save_invoice_to_db(invoice_data, file_path="", uploaded_by=""):
@@ -202,8 +216,11 @@ def ocr_invoice(file_path: str, uploaded_by: str = "") -> str:
         if result.get("words_result_num", 0) > 0:
             invoice_data = parse_invoice_result(result["words_result"][0])
 
+            # 持久化图片文件
+            persistent_path = _persist_file(file_path, "invoices")
+
             # 存入Invoice表
-            invoice_id = _save_invoice_to_db(invoice_data, file_path=file_path, uploaded_by=uploaded_by)
+            invoice_id = _save_invoice_to_db(invoice_data, file_path=persistent_path, uploaded_by=uploaded_by)
 
             id_hint = f"\n发票记录ID：{invoice_id}" if invoice_id else ""
             
@@ -246,7 +263,8 @@ def batch_ocr_invoices(file_paths: str, uploaded_by: str = "") -> str:
             
             if result.get("words_result_num", 0) > 0:
                 invoice_data = parse_invoice_result(result["words_result"][0])
-                inv_id = _save_invoice_to_db(invoice_data, file_path=file_path, uploaded_by=uploaded_by)
+                persistent_path = _persist_file(file_path, "invoices")
+                inv_id = _save_invoice_to_db(invoice_data, file_path=persistent_path, uploaded_by=uploaded_by)
                 results.append({
                     "file": os.path.basename(file_path),
                     "type_name": invoice_data["type_name"],

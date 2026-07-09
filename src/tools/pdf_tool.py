@@ -1,7 +1,7 @@
 from langchain.tools import tool
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage, PageBreak
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
@@ -11,7 +11,7 @@ import json
 import os
 from config import OUTPUTS_DIR
 from src.db.database import SessionLocal
-from src.db.models import Invoice
+from src.db.models import Invoice, Voucher
 
 # 注册中文字体
 _FONT_REGISTERED = False
@@ -152,6 +152,85 @@ def generate_reimbursement_pdf(
         ]))
         elements.append(inv_table)
         elements.append(Spacer(1, 15))
+
+    # 凭证明细：从Voucher表读取
+    vouchers = []
+    try:
+        db = SessionLocal()
+        db_vouchers = db.query(Voucher).filter_by(reimbursement_no=reimbursement_no).all()
+        if db_vouchers:
+            vouchers = [
+                {
+                    "voucher_type": v.voucher_type or "-",
+                    "amount": v.amount or 0,
+                    "payment_date": v.payment_date or "-",
+                    "payee": v.payee or "-",
+                }
+                for v in db_vouchers
+            ]
+        db.close()
+    except Exception:
+        pass
+
+    if vouchers:
+        elements.append(Paragraph("凭证明细", heading_style))
+        v_header = ["序号", "凭证类型", "金额(元)", "交易日期", "收款方"]
+        v_data = [v_header]
+        for idx, v in enumerate(vouchers, 1):
+            v_data.append([
+                str(idx),
+                v.get("voucher_type", "-"),
+                f"{v.get('amount', 0):,.2f}",
+                v.get("payment_date", "-"),
+                v.get("payee", "-"),
+            ])
+        v_table = Table(v_data, colWidths=[40, 120, 80, 100, 120])
+        v_table.setStyle(TableStyle([
+            ('FONTNAME', (0, 0), (-1, -1), CN_FONT),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8EAF6')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ]))
+        elements.append(v_table)
+        elements.append(Spacer(1, 15))
+
+    # 附件图片区：发票+凭证图片
+    image_paths = []
+    try:
+        db = SessionLocal()
+        # 收集发票图片
+        db_invoices = db.query(Invoice).filter_by(reimbursement_no=reimbursement_no).all()
+        for inv in db_invoices:
+            if inv.file_path and os.path.exists(inv.file_path):
+                image_paths.append(("发票", inv.file_path))
+        # 收集凭证图片
+        db_vouchers = db.query(Voucher).filter_by(reimbursement_no=reimbursement_no).all()
+        for v in db_vouchers:
+            if v.file_path and os.path.exists(v.file_path):
+                image_paths.append(("凭证", v.file_path))
+        db.close()
+    except Exception:
+        pass
+
+    if image_paths:
+        elements.append(Paragraph("附件图片", heading_style))
+        available_width = A4[0] - 50 * mm  # 页面宽度减去左右边距
+        for label, img_path in image_paths:
+            try:
+                img = RLImage(img_path)
+                img_w, img_h = img.drawWidth, img.drawHeight
+                # 缩放：宽度不超过可用宽度，高度不超过200mm
+                scale = min(available_width / img_w, 200 * mm / img_h, 1.0)
+                img.drawWidth = img_w * scale
+                img.drawHeight = img_h * scale
+                elements.append(Paragraph(f"{label}：{os.path.basename(img_path)}", normal_style))
+                elements.append(img)
+                elements.append(Spacer(1, 10))
+            except Exception:
+                elements.append(Paragraph(f"{label}：{os.path.basename(img_path)}（图片加载失败）", normal_style))
 
     # 审批流程
     elements.append(Paragraph("审批流程", heading_style))
