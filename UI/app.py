@@ -13,7 +13,7 @@ seed_main()
 from UI.constants import CUSTOM_CSS, TAB_CHAT, TAB_BUDGET, TAB_PROGRESS, TAB_APPROVAL
 from UI.chat_page import (
     agent_available, chat_send, ocr_file_handler, clear_chat,
-    load_full_chat_history, send_greeting, voucher_file_handler
+    load_full_chat_history, send_greeting, voucher_file_handler, restore_chat_on_reload
 )
 from UI.budget_page import update_budget
 from UI.progress_page import (
@@ -35,7 +35,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
     )
 
     # ========== 登录区域 ==========
-    with gr.Column(visible=False, elem_classes=["login-area"]) as login_area:
+    with gr.Column(visible=True, elem_classes=["login-area"]) as login_area:
         gr.Markdown("# 企业财务报销助手")
         gr.Markdown("请登录以使用系统")
         login_user_id = gr.Textbox(label="工号", placeholder="如 E001 / S001 / ADMIN")
@@ -63,7 +63,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             reg_msg = gr.Markdown("")
 
     # ========== 主功能区域 ==========
-    with gr.Column(visible=True, elem_classes=["main-area"]) as main_area:
+    with gr.Column(visible=False, elem_classes=["main-area"]) as main_area:
         user_info_bar = gr.Markdown("", elem_classes=["user-bar"])
         logout_btn = gr.Button("退出登录", size="sm")
         tab_js_injector = gr.HTML(elem_classes=["tab-js-injector"])
@@ -292,7 +292,7 @@ with gr.Blocks(title="企业财务报销助手") as demo:
             history_display
         ]
     ).then(
-        fn=send_greeting,
-        inputs=[chatbot_display, user_state],
+        fn=restore_chat_on_reload,
+        inputs=[user_state],
         outputs=[chatbot_display]
     )

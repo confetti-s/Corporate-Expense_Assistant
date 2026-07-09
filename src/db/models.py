@@ -134,17 +134,13 @@ class ApprovalRecords(Base):
     reimbursement = relationship('Reimbursements', back_populates='approval_records')
 
 
-class ChatHistory(Base):  # 新增对话历史表
+class ChatHistory(Base):
     __tablename__ = 'chat_history'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(32), nullable=False, index=True)      # 用户ID
+    user_id = Column(String(32), nullable=False)                  # 用户ID
+    session_id = Column(String(64), nullable=True)                # 会话ID，区分同一用户的多轮独立会话
     role = Column(String(20), nullable=False)                     # user / assistant
     content = Column(Text, nullable=False)                        # 消息内容
-    created_at = Column(DateTime, default=datetime.now, index=True)
-
-    # 可选：关联报销单（如果对话中产生了报销单）
     reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
-
-    # 可选：会话ID（如果希望支持多会话）
-    # session_id = Column(String(64), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.now)

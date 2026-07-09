@@ -40,13 +40,14 @@ def _check_user_switch(user_state):
 
 # ===================== 对话历史持久化 =====================
 
-def save_chat_message(user_id: str, role: str, content: str, reimbursement_id: int = None):
+def save_chat_message(user_id: str, role: str, content: str, session_id: str = None, reimbursement_id: int = None):
     if not user_id:
         return
     db = SessionLocal()
     try:
         record = ChatHistory(
             user_id=user_id,
+            session_id=session_id,
             role=role,
             content=content,
             reimbursement_id=reimbursement_id
@@ -60,13 +61,16 @@ def save_chat_message(user_id: str, role: str, content: str, reimbursement_id: i
         db.close()
 
 
-def load_chat_history(user_id: str, limit: int = 10) -> list:
+def load_chat_history(user_id: str, session_id: str = None, limit: int = 10) -> list:
     if not user_id:
         return []
     db = SessionLocal()
     try:
-        records = db.query(ChatHistory)\
-            .filter_by(user_id=user_id)\
+        query = db.query(ChatHistory)\
+            .filter_by(user_id=user_id)
+        if session_id:
+            query = query.filter_by(session_id=session_id)
+        records = query\
             .order_by(ChatHistory.created_at.desc())\
             .limit(limit)\
             .all()
@@ -77,6 +81,31 @@ def load_chat_history(user_id: str, limit: int = 10) -> list:
                 "role": record.role,
                 "content": record.content
             })
+        return history
+    finally:
+        db.close()
+
+
+def restore_chat_on_reload(user_state):
+    """页面刷新时从数据库恢复当前会话的聊天记录，保证会话内容不变"""
+    if not user_state:
+        return []
+    user_id = user_state.get('user_id')
+    session_id = user_state.get('session_id')
+    if not user_id:
+        return []
+    db = SessionLocal()
+    try:
+        query = db.query(ChatHistory).filter_by(user_id=user_id)
+        if session_id:
+            query = query.filter_by(session_id=session_id)
+        records = query.order_by(ChatHistory.id.asc()).all()
+        history = []
+        for r in records:
+            content = r.content
+            if r.role == "assistant":
+                content = _render_jump_buttons(content)
+            history.append({"role": r.role, "content": content})
         return history
     finally:
         db.close()
@@ -128,28 +157,54 @@ def send_greeting(chat_history, user_state):
         yield chat_history
 
     if user_state and user_state.get('user_id'):
-        save_chat_message(user_state['user_id'], "assistant", full_response)
+        save_chat_message(user_state['user_id'], "assistant", full_response, session_id=user_state.get('session_id'))
 
 
 def load_full_chat_history(user_state):
-    """加载用户全部聊天历史，格式化为文本展示"""
+    """加载当前用户所有会话的聊天历史，按会话分组展示"""
     if not user_state:
+        return "暂无聊天记录"
+    user_id = user_state.get('user_id')
+    current_session_id = user_state.get('session_id')
+    if not user_id:
         return "暂无聊天记录"
     db = SessionLocal()
     try:
         records = db.query(ChatHistory)\
-            .filter_by(user_id=user_state['user_id'])\
-            .order_by(ChatHistory.id.asc())\
+            .filter_by(user_id=user_id)\
+            .order_by(ChatHistory.session_id, ChatHistory.id.asc())\
             .all()
         if not records:
             return "暂无聊天记录"
-        lines = []
+
+        sessions = {}
+        session_order = []
         for r in records:
-            role_label = "用户" if r.role == "user" else "助手"
-            time_str = r.created_at.strftime('%m-%d %H:%M') if r.created_at else ""
-            content = r.content.replace("\\n", "\n") if r.content else ""
-            lines.append(f"**{role_label}** ({time_str})\n{content}")
-        return "\n\n---\n\n".join(lines)
+            sid = r.session_id or "未知会话"
+            if sid not in sessions:
+                sessions[sid] = []
+                session_order.append(sid)
+            sessions[sid].append(r)
+
+        result_parts = []
+        for sid in session_order:
+            msgs = sessions[sid]
+            first_time = msgs[0].created_at
+            last_time = msgs[-1].created_at
+            time_range = f"{first_time.strftime('%m-%d %H:%M')} ~ {last_time.strftime('%m-%d %H:%M')}" if first_time and last_time else ""
+            is_current = (sid == current_session_id)
+            tag = " **[当前会话]**" if is_current else ""
+
+            header = f"## 会话 {time_range}{tag}"
+            lines = []
+            for r in msgs:
+                role_label = "用户" if r.role == "user" else "助手"
+                time_str = r.created_at.strftime('%H:%M') if r.created_at else ""
+                content = r.content.replace("\\n", "\n") if r.content else ""
+                lines.append(f"**{role_label}** ({time_str})\n{content}")
+            result_parts.append(header + "\n\n" + "\n\n---\n\n".join(lines))
+
+        return "\n\n---\n\n".join(result_parts)
     finally:
         db.close()
 
@@ -231,11 +286,12 @@ def chat_send(message, chat_history, file_uploads, user_state):
 
     if user_state and user_state.get('user_id'):
         user_id = user_state['user_id']
-        save_chat_message(user_id, "user", message)
+        session_id = user_state.get('session_id')
+        save_chat_message(user_id, "user", message, session_id=session_id)
         if full_response:
-            save_chat_message(user_id, "assistant", full_response)
+            save_chat_message(user_id, "assistant", full_response, session_id=session_id)
         else:
-            save_chat_message(user_id, "assistant", "无回复")
+            save_chat_message(user_id, "assistant", "无回复", session_id=session_id)
         print(f"对话已保存，用户: {user_id}")
 
 
@@ -270,8 +326,9 @@ def ocr_file_handler(file, chat_history, user_state):
     chat_history.append({"role": "assistant", "content": result})
 
     if user_state and user_state.get('user_id'):
-        save_chat_message(user_state['user_id'], "user", f"[上传发票] {filename}")
-        save_chat_message(user_state['user_id'], "assistant", result)
+        session_id = user_state.get('session_id')
+        save_chat_message(user_state['user_id'], "user", f"[上传发票] {filename}", session_id=session_id)
+        save_chat_message(user_state['user_id'], "assistant", result, session_id=session_id)
 
     return chat_history, None
 
@@ -299,8 +356,9 @@ def voucher_file_handler(files, chat_history, user_state):
         chat_history.append({"role": "assistant", "content": result})
 
         if user_state and user_state.get('user_id'):
-            save_chat_message(user_state['user_id'], "user", f"[上传凭证] {filename}")
-            save_chat_message(user_state['user_id'], "assistant", result)
+            session_id = user_state.get('session_id')
+            save_chat_message(user_state['user_id'], "user", f"[上传凭证] {filename}", session_id=session_id)
+            save_chat_message(user_state['user_id'], "assistant", result, session_id=session_id)
 
     return chat_history, None
 
