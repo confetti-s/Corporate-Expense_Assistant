@@ -57,42 +57,26 @@ def run_agent(user_query: str, chat_history: list = None):
         for chunk in agent.stream({"messages": messages}):
             print(chunk)
             
-            if isinstance(chunk, dict) and "model" in chunk:
-                model_data = chunk["model"]
-                if isinstance(model_data, dict) and "messages" in model_data:
-                    for msg in model_data["messages"]:
-                        if isinstance(msg, AIMessage) and msg.content and not msg.tool_calls:
-                            full_response = msg.content  # 获取完整响应
-            
-        # 🔥 关键：将完整响应拆分成小块逐块 yield
+            if isinstance(chunk, dict):
+                if "model" in chunk:
+                    model_data = chunk["model"]
+                    if isinstance(model_data, dict) and "messages" in model_data:
+                        for msg in model_data["messages"]:
+                            if isinstance(msg, AIMessage):
+                                if msg.content:
+                                    full_response = msg.content
+                                elif msg.tool_calls and len(msg.tool_calls) > 0:
+                                    pass
+                elif isinstance(chunk.get("messages"), list):
+                    for msg in chunk["messages"]:
+                        if isinstance(msg, AIMessage) and msg.content:
+                            full_response = msg.content
+        
         if full_response:
-            # 方案1：按字符逐个发送（最细腻的流式效果）
             for char in full_response:
                 yield char
-                import time
-                # time.sleep(0.01)  # 可选：控制速度
-            
-            # 方案2：按句子或词语发送（更快）
-            # import re
-            # # 按中文标点、英文句号、换行分割
-            # chunks = re.split(r'([，。！？\n\.!?])', full_response)
-            # for i in range(0, len(chunks), 2):
-            #     chunk = chunks[i]
-            #     if i + 1 < len(chunks):
-            #         chunk += chunks[i + 1]
-            #     if chunk:
-            #         yield chunk
-            #         import time
-            #         time.sleep(0.02)
-            
-            # 方案3：按固定长度分块
-            # chunk_size = 5
-            # for i in range(0, len(full_response), chunk_size):
-            #     yield full_response[i:i+chunk_size]
-            #     import time
-            #     time.sleep(0.01)
         else:
-            yield "无回复"
+            yield "抱歉，我无法理解您的请求，请换一种方式描述。"
             
     except Exception as e:
         yield f"Agent执行失败：{str(e)}\n请确保已正确配置.env文件中的DASHSCOPE_API_KEY和WORKSPACE_ID"
