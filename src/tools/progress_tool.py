@@ -22,7 +22,8 @@ def query_reimbursement_progress(reimbursement_no: str) -> str:
             "pending": "待审批",
             "reviewing": "审批中",
             "approved": "已通过",
-            "rejected": "已驳回"
+            "rejected": "已驳回",
+            "split": "已拆分"
         }
         
         result = f"""报销单信息：
@@ -82,7 +83,8 @@ def query_reimbursements_by_date(start_date: str, end_date: str, employee_id: st
             "pending": "待审批",
             "reviewing": "审批中",
             "approved": "已通过",
-            "rejected": "已驳回"
+            "rejected": "已驳回",
+            "split": "已拆分"
         }
         
         result = f"报销记录查询结果（共 {len(reimbursements)} 条）：\n\n"
