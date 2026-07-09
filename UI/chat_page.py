@@ -255,24 +255,27 @@ def ocr_file_handler(file, chat_history, user_state):
     return chat_history, None
 
 
-def voucher_file_handler(file, chat_history, user_state):
-    """处理凭证截图上传，调用通用文字识别"""
-    if not file:
+def voucher_file_handler(files, chat_history, user_state):
+    """处理凭证截图上传，调用通用文字识别（支持多张）"""
+    if not files:
         return chat_history or [], None
 
-    try:
-        fp = file.name if hasattr(file, 'name') else str(file)
-        user_id = user_state['user_id'] if user_state else ""
-        filename = os.path.basename(fp)
-
-        result = recognize_voucher.func(fp, uploaded_by=user_id)
-    except Exception as e:
-        filename = "文件"
-        result = f"识别凭证时出错：{str(e)}"
-
     chat_history = chat_history or []
-    chat_history.append({"role": "user", "content": f"[上传凭证] {filename}"})
-    chat_history.append({"role": "assistant", "content": result})
+    user_id = user_state['user_id'] if user_state else ""
+
+    file_list = files if isinstance(files, list) else [files]
+
+    for f in file_list:
+        try:
+            fp = f.name if hasattr(f, 'name') else str(f)
+            filename = os.path.basename(fp)
+            result = recognize_voucher.func(fp, uploaded_by=user_id)
+        except Exception as e:
+            filename = os.path.basename(f.name) if hasattr(f, 'name') else "文件"
+            result = f"识别凭证时出错：{str(e)}"
+
+        chat_history.append({"role": "user", "content": f"[上传凭证] {filename}"})
+        chat_history.append({"role": "assistant", "content": result})
 
     return chat_history, None
 

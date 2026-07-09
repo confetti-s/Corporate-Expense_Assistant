@@ -106,18 +106,19 @@ with gr.Blocks(title="企业财务报销助手") as demo:
                             sanitize_html=False
                         )
                         with gr.Row():
-                            msg_input = gr.Textbox(
-                                placeholder="描述您的报销需求...",
-                                show_label=False,
-                                scale=4
-                            )
-                            voucher_input = gr.File(
-                                label="上传凭证",
-                                file_types=[".jpg", ".jpeg", ".png", ".bmp"],
-                                file_count="single",
-                                scale=1,
-                                min_width=100
-                            )
+                            with gr.Row(elem_classes=["chat-input-row"], scale=6):
+                                msg_input = gr.Textbox(
+                                    placeholder="描述您的报销需求...",
+                                    show_label=False,
+                                    elem_classes=["chat-input-field"]
+                                )
+                                voucher_input = gr.UploadButton(
+                                    label="+",
+                                    file_types=[".jpg", ".jpeg", ".png", ".bmp"],
+                                    file_count="multiple",
+                                    size="sm",
+                                    elem_classes=["voucher-icon-btn"]
+                                )
                             send_btn = gr.Button("发送", variant="primary", scale=1)
 
                         with gr.Accordion("查看历史聊天", open=False):

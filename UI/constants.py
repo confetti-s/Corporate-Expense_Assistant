@@ -14,4 +14,23 @@ CUSTOM_CSS = """
 .pending,
 .generating,
 [aria-busy="true"] { border-color: transparent !important; outline: none !important; box-shadow: none !important; }
+.chat-input-row { gap: 0 !important; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; align-items: stretch !important; }
+.chat-input-field { border: none !important; border-radius: 0 !important; box-shadow: none !important; flex: 1 !important; min-width: 0 !important; }
+.chat-input-field textarea { padding-right: 40px !important; }
+.voucher-icon-btn, .voucher-icon-btn > div, .voucher-icon-btn button {
+    border: none !important;
+    border-radius: 0 !important;
+    border-left: 1px solid #ddd !important;
+    background: transparent !important;
+    color: #666 !important;
+    min-width: 32px !important;
+    max-width: 32px !important;
+    width: 32px !important;
+    flex: 0 0 32px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    font-size: 16px !important;
+    line-height: 1 !important;
+}
+.voucher-icon-btn:hover, .voucher-icon-btn:hover button { background: #f5f5f5 !important; color: #333 !important; }
 """
