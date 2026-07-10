@@ -1,7 +1,7 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
 from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User, Invoice, Voucher, DepartmentBudget
-from src.tools.compliance_tool import compliance_check,_check_expense_amount, _determine_sub_expense_type
+from src.tools.compliance_tool import compliance_check, _check_expense_amount, _determine_sub_expense_type, _check_timeliness, _determine_voucher_sub_expense_type, _VoucherAsInvoice
 
 from datetime import datetime
 from sqlalchemy import func
@@ -15,10 +15,11 @@ def create_reimbursement_split(
     department_id: str,
     expense_type: str,
     invoice_ids: str,
-    description: str = "",
+    description: str,
     invoice_details_json: str = "[]",
     applicant_email: str = "",
-    voucher_ids: str = ""
+    voucher_ids: str = "",
+    voucher_descriptions: str = ""
 ) -> str:
     """
     按合规性分别创建报销单：合规发票合并一张，不合规发票各一张
@@ -26,18 +27,19 @@ def create_reimbursement_split(
     :param employee_name: 员工姓名
     :param department_id: 部门ID，如 D001-D005
     :param expense_type: 费用类型，如 差旅费、招待费、办公用品、交通费、通讯费
-    :param invoice_ids: 发票记录ID列表，用逗号分隔（必填，如"1,2,3"）
-    :param description: 报销说明（可选）
+    :param invoice_ids: 发票记录ID列表，用逗号分隔（如"1,2,3"，与voucher_ids至少填一个）
+    :param description: 报销说明（必填，简要说明报销事由）
     :param invoice_details_json: 发票OCR结果的JSON数组字符串（可选）
     :param applicant_email: 申请人邮箱（可选，用于审批通知）
-    :param voucher_ids: 凭证记录ID列表，用逗号分隔（可选，如"1,2"）
+    :param voucher_ids: 凭证记录ID列表，用逗号分隔（如"1,2"，与invoice_ids至少填一个）
+    :param voucher_descriptions: 凭证描述列表，用|分隔，与voucher_ids顺序对应（如"拜访客户，公司→XX|去机场"）
     """
     db = SessionLocal()
     try:
-        if not invoice_ids.strip():
-            return "错误：发票ID列表不能为空"
+        if not invoice_ids.strip() and not (voucher_ids and voucher_ids.strip()):
+            return "错误：发票ID和凭证ID不能同时为空，至少需要关联一张发票或凭证"
         
-        id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
+        id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()] if invoice_ids.strip() else []
         
         for inv_id in id_list:
             inv = db.query(Invoice).filter_by(id=inv_id).first()
@@ -56,13 +58,17 @@ def create_reimbursement_split(
         
         voucher_list = []
         voucher_amount = 0.0
+        v_desc_list = [d.strip() for d in voucher_descriptions.split("|") if d.strip()] if voucher_descriptions and voucher_descriptions.strip() else []
         if voucher_ids and voucher_ids.strip():
             vid_list = [int(x.strip()) for x in voucher_ids.split(",") if x.strip()]
-            for vid in vid_list:
+            for idx, vid in enumerate(vid_list):
                 v = db.query(Voucher).filter_by(id=vid).first()
                 if v:
                     if v.reimbursement_id is not None:
                         return f"错误：凭证记录ID {vid}已关联报销单 {v.reimbursement_no}，不可重复报销"
+                    # 写入凭证描述
+                    if idx < len(v_desc_list) and v_desc_list[idx]:
+                        v.description = v_desc_list[idx]
                     voucher_list.append(v)
                     voucher_amount += v.amount or 0
         
@@ -72,9 +78,31 @@ def create_reimbursement_split(
         else:
             applicant_email = None
         
+        # 对凭证进行合规检查
+        user_role = user.role if user else "employee"
+        for v in voucher_list:
+            if not v.sub_expense_type:
+                v.sub_expense_type = _determine_voucher_sub_expense_type(v) or None
+            v_invalid_reasons = []
+            timeliness_reason = _check_timeliness(v.payment_date)
+            if timeliness_reason:
+                v_invalid_reasons.append(timeliness_reason)
+            adapter = _VoucherAsInvoice(v)
+            amount_reason = _check_expense_amount(expense_type, adapter, user_role, employee_id, db)
+            if amount_reason:
+                v_invalid_reasons.append(amount_reason)
+            v_invalid_reason = "；".join(v_invalid_reasons) if v_invalid_reasons else None
+            if v_invalid_reason:
+                v.is_valid = False
+                v.invalid_reason = v_invalid_reason
+            else:
+                v.is_valid = True
+                v.invalid_reason = None
+        db.commit()
+        
         created_reimbursements = []
         
-        if valid_invoices:
+        if valid_invoices or voucher_list:
             valid_total = sum(inv.amount for inv in valid_invoices) + voucher_amount
             valid_no = _get_next_reimbursement_no(db)
             need_special_approval = valid_total >= 10000
@@ -86,7 +114,7 @@ def create_reimbursement_split(
                 department_id=department_id,
                 expense_type=expense_type,
                 total_amount=valid_total,
-                description=f"合规发票合并：{description}" if description else "合规发票合并",
+                description=f"合规票据合并：{description}" if description else "合规票据合并",
                 status="draft",
                 need_special_approval=need_special_approval,
                 invoice_details=invoice_details_json,
@@ -110,8 +138,9 @@ def create_reimbursement_split(
             created_reimbursements.append({
                 "no": valid_no,
                 "amount": valid_total,
-                "type": "合规发票合并",
+                "type": "合规票据合并",
                 "invoice_count": len(valid_invoices),
+                "voucher_count": len(voucher_list),
                 "status": "草稿"
             })
         
@@ -123,7 +152,7 @@ def create_reimbursement_split(
                 employee_id=employee_id,
                 employee_name=employee_name,
                 department_id=department_id,
-                expense_type=inv.invoice_type_name or expense_type or "其他",
+                expense_type=expense_type or "其他",
                 total_amount=inv.amount,
                 description=f"不合规发票（{inv.invalid_reason}）：{description}" if description else f"不合规发票（{inv.invalid_reason}）",
                 status="draft",
@@ -155,6 +184,8 @@ def create_reimbursement_split(
             result += f"   类型：{reimb['type']}\n"
             result += f"   金额：{reimb['amount']:,.2f} 元\n"
             result += f"   关联发票：{reimb['invoice_count']} 张\n"
+            if reimb.get('voucher_count'):
+                result += f"   关联凭证：{reimb['voucher_count']} 张\n"
             result += f"   状态：{reimb['status']}\n\n"
         
         result += "接下来我将为您展示每张报销单的详情，请确认是否需要修改。"
@@ -174,10 +205,11 @@ def create_reimbursement(
     department_id: str,
     expense_type: str,
     invoice_ids: str,
-    description: str = "",
+    description: str,
     invoice_details_json: str = "[]",
     applicant_email: str = "",
-    voucher_ids: str = ""
+    voucher_ids: str = "",
+    voucher_descriptions: str = ""
 ) -> str:
     """
     创建一条新的报销记录并存入数据库，返回报销单号
@@ -185,18 +217,19 @@ def create_reimbursement(
     :param employee_name: 员工姓名
     :param department_id: 部门ID，如 D001-D006
     :param expense_type: 费用类型（大分类），如 差旅费、业务招待费、日常交通费、办公用品、其他费用
-    :param invoice_ids: 发票记录ID列表，用逗号分隔（必填，如"1,2,3"，关联Invoice表中的发票）
-    :param description: 报销说明（可选）
+    :param invoice_ids: 发票记录ID列表，用逗号分隔（如"1,2,3"，与voucher_ids至少填一个）
+    :param description: 报销说明（必填，简要说明报销事由）
     :param invoice_details_json: 发票OCR结果的JSON数组字符串（可选）
     :param applicant_email: 申请人邮箱（可选，用于审批通知）
-    :param voucher_ids: 凭证记录ID列表，用逗号分隔（可选，如"1,2"，关联Voucher表中的凭证）
+    :param voucher_ids: 凭证记录ID列表，用逗号分隔（如"1,2"，与invoice_ids至少填一个）
+    :param voucher_descriptions: 凭证描述列表，用|分隔，与voucher_ids顺序对应（如"拜访客户，公司→XX|去机场"）
     """
     db = SessionLocal()
     try:
-        if not invoice_ids.strip():
-            return "错误：发票ID列表不能为空"
+        if not invoice_ids.strip() and not (voucher_ids and voucher_ids.strip()):
+            return "错误：发票ID和凭证ID不能同时为空，至少需要关联一张发票或凭证"
         
-        id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()]
+        id_list = [int(x.strip()) for x in invoice_ids.split(",") if x.strip()] if invoice_ids.strip() else []
         
         for inv_id in id_list:
             inv = db.query(Invoice).filter_by(id=inv_id).first()
@@ -215,31 +248,23 @@ def create_reimbursement(
             inv = db.query(Invoice).filter_by(id=inv_id).first()
             if inv:
 
-                invalid_reason = None
-
-                if not inv.invoice_date:
-                    invalid_reason = "缺少开票日期，无法进行时效性校验"
-                else:
-                    try:
-                        invoice_dt = datetime.strptime(inv.invoice_date, "%Y-%m-%d")
-                        days_diff = (datetime.now() - invoice_dt).days
-                        if days_diff > 90:
-                            invalid_reason = f"超过90天有效期（发票日期：{inv.invoice_date}）"
-                    except ValueError:
-                        try:
-                            invoice_dt = datetime.strptime(inv.invoice_date, "%Y年%m月%d日")
-                            days_diff = (datetime.now() - invoice_dt).days
-                            if days_diff > 90:
-                                invalid_reason = f"超过90天有效期（发票日期：{inv.invoice_date}）"
-                        except ValueError:
-                            invalid_reason = "发票日期格式不正确"
-
-              
+                invalid_reasons = []
 
                 # 先推断并写入小分类，合规检查依赖此字段
                 if not inv.sub_expense_type:
                     inv.sub_expense_type = _determine_sub_expense_type(inv) or None
-                invalid_reason = _check_expense_amount(expense_type, inv, user_role, employee_id, db)
+
+                # 1) 90天时效性校验
+                timeliness_reason = _check_timeliness(inv.invoice_date)
+                if timeliness_reason:
+                    invalid_reasons.append(timeliness_reason)
+
+                # 2) 金额合规检查
+                amount_reason = _check_expense_amount(expense_type, inv, user_role, employee_id, db)
+                if amount_reason:
+                    invalid_reasons.append(amount_reason)
+
+                invalid_reason = "；".join(invalid_reasons) if invalid_reasons else None
 
                 if invalid_reason:
                     inv.is_valid = False
@@ -263,16 +288,41 @@ def create_reimbursement(
 
         voucher_list = []
         voucher_amount = 0.0
+        v_desc_list = [d.strip() for d in voucher_descriptions.split("|") if d.strip()] if voucher_descriptions and voucher_descriptions.strip() else []
         if voucher_ids and voucher_ids.strip():
             vid_list = [int(x.strip()) for x in voucher_ids.split(",") if x.strip()]
-            for vid in vid_list:
+            for idx, vid in enumerate(vid_list):
                 v = db.query(Voucher).filter_by(id=vid).first()
                 if v:
                     if v.reimbursement_id is not None:
                         return f"错误：凭证记录ID {vid}已关联报销单 {v.reimbursement_no}，不可重复报销"
+                    # 写入凭证描述
+                    if idx < len(v_desc_list) and v_desc_list[idx]:
+                        v.description = v_desc_list[idx]
                     voucher_list.append(v)
                     voucher_amount += v.amount or 0
             total_amount += voucher_amount
+
+        # 对凭证进行合规检查
+        for v in voucher_list:
+            if not v.sub_expense_type:
+                v.sub_expense_type = _determine_voucher_sub_expense_type(v) or None
+            v_invalid_reasons = []
+            timeliness_reason = _check_timeliness(v.payment_date)
+            if timeliness_reason:
+                v_invalid_reasons.append(timeliness_reason)
+            adapter = _VoucherAsInvoice(v)
+            amount_reason = _check_expense_amount(expense_type, adapter, user_role, employee_id, db)
+            if amount_reason:
+                v_invalid_reasons.append(amount_reason)
+            v_invalid_reason = "；".join(v_invalid_reasons) if v_invalid_reasons else None
+            if v_invalid_reason:
+                v.is_valid = False
+                v.invalid_reason = v_invalid_reason
+            else:
+                v.is_valid = True
+                v.invalid_reason = None
+        db.commit()
 
         year = datetime.now().strftime("%Y")
         last_record = db.query(Reimbursements).filter(
@@ -341,7 +391,9 @@ def create_reimbursement(
 
         special_note = "（需特殊审批）" if need_special_approval else ""
         invoice_note = f"\n已关联 {linked_count} 张发票记录（合规 {len(valid_invoices)} 张，不合规 {len(invalid_invoices)} 张）" if linked_count > 0 else ""
-        voucher_note = f"\n已关联 {linked_voucher_count} 张凭证记录（金额 {voucher_amount:,.2f} 元）" if linked_voucher_count > 0 else ""
+        valid_voucher_count = sum(1 for v in voucher_list if v.is_valid)
+        invalid_voucher_count = sum(1 for v in voucher_list if not v.is_valid)
+        voucher_note = f"\n已关联 {linked_voucher_count} 张凭证记录（合规 {valid_voucher_count} 张，不合规 {invalid_voucher_count} 张，金额 {voucher_amount:,.2f} 元）" if linked_voucher_count > 0 else ""
         
         result = (
             f"报销单创建成功！\n"
@@ -357,6 +409,12 @@ def create_reimbursement(
             result += f"不合规发票明细：\n"
             for inv in invalid_invoices:
                 result += f"  - 发票ID {inv.id}：{inv.invalid_reason}\n"
+        
+        invalid_vouchers = [v for v in voucher_list if not v.is_valid]
+        if invalid_vouchers:
+            result += f"不合规凭证明细：\n"
+            for v in invalid_vouchers:
+                result += f"  - 凭证ID {v.id}：{v.invalid_reason}\n"
         
         result += f"请记住报销单号 {reimbursement_no}，接下来需要提交审批。\n[[进度查询]]"
         
@@ -483,26 +541,43 @@ def _create_approval_records(db, reimbursement):
     return None
 
 
-def _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message):
+def _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message, valid_vouchers=None, invalid_vouchers=None):
     valid_count = len(valid_invoices)
     invalid_count = len(invalid_invoices)
+    valid_voucher_count = len(valid_vouchers) if valid_vouchers else 0
+    invalid_voucher_count = len(invalid_vouchers) if invalid_vouchers else 0
+    total_valid = valid_count + valid_voucher_count
+    total_invalid = invalid_count + invalid_voucher_count
     total_amount = reimbursement.total_amount if reimbursement else sum(inv.amount for inv in valid_invoices) + sum(inv.amount for inv in invalid_invoices)
     
-    if valid_count == 0:
-        suggestion = f"【AI建议：驳回】\n理由：\n  - 所有发票均不合规（共{invalid_count}张）\n"
+    if total_valid == 0 and total_invalid > 0:
+        suggestion = f"【AI建议：驳回】\n理由：\n  - 所有票据均不合规（发票{invalid_count}张，凭证{invalid_voucher_count}张）\n"
         for inv in invalid_invoices:
             suggestion += f"    * 发票ID{inv.id}：{inv.invalid_reason}\n"
-    elif invalid_count == 0 and budget_sufficient:
+        if invalid_vouchers:
+            for v in invalid_vouchers:
+                suggestion += f"    * 凭证ID{v.id}：{v.invalid_reason}\n"
+    elif total_invalid == 0 and budget_sufficient:
+        bill_info = f"合规发票{valid_count}张" + (f"，合规凭证{valid_voucher_count}张" if valid_voucher_count > 0 else "")
         if total_amount <= 1000:
-            suggestion = f"【AI建议：通过】\n理由：\n  - 所有发票均合规（共{valid_count}张）\n  - 部门预算充足\n  - 金额{total_amount:,.2f}元≤1000元，符合快速审批条件\n"
+            suggestion = f"【AI建议：通过】\n理由：\n  - {bill_info}\n  - 部门预算充足\n  - 金额{total_amount:,.2f}元≤1000元，符合快速审批条件\n"
         else:
-            suggestion = f"【AI建议：通过】\n理由：\n  - 所有发票均合规（共{valid_count}张）\n  - 部门预算充足\n  - 金额{total_amount:,.2f}元>1000元，需按金额对应审批级别处理\n"
-    elif invalid_count > 0 and budget_sufficient:
-        suggestion = f"【AI建议：谨慎审批】\n理由：\n  - 合规发票{valid_count}张，不合规发票{invalid_count}张\n  - 部门预算充足\n  - 建议仔细审核不合规发票的具体原因\n"
+            suggestion = f"【AI建议：通过】\n理由：\n  - {bill_info}\n  - 部门预算充足\n  - 金额{total_amount:,.2f}元>1000元，需按金额对应审批级别处理\n"
+    elif total_invalid > 0 and budget_sufficient:
+        suggestion = f"【AI建议：谨慎审批】\n理由：\n  - 合规发票{valid_count}张，不合规发票{invalid_count}张"
+        if valid_voucher_count > 0 or invalid_voucher_count > 0:
+            suggestion += f"，合规凭证{valid_voucher_count}张，不合规凭证{invalid_voucher_count}张"
+        suggestion += f"\n  - 部门预算充足\n  - 建议仔细审核不合规票据的具体原因\n"
         for inv in invalid_invoices:
             suggestion += f"    * 发票ID{inv.id}：{inv.invalid_reason}\n"
+        if invalid_vouchers:
+            for v in invalid_vouchers:
+                suggestion += f"    * 凭证ID{v.id}：{v.invalid_reason}\n"
     else:
-        suggestion = f"【AI建议：谨慎审批】\n理由：\n  - {budget_message}\n  - 合规发票{valid_count}张，不合规发票{invalid_count}张\n"
+        suggestion = f"【AI建议：谨慎审批】\n理由：\n  - {budget_message}\n  - 合规发票{valid_count}张，不合规发票{invalid_count}张"
+        if valid_voucher_count > 0 or invalid_voucher_count > 0:
+            suggestion += f"，合规凭证{valid_voucher_count}张，不合规凭证{invalid_voucher_count}张"
+        suggestion += "\n"
     
     return suggestion
 
@@ -523,6 +598,7 @@ def view_reimbursement_detail(reimbursement_no: str) -> str:
             return f"错误：未找到报销单号为 {reimbursement_no} 的记录"
         
         invoices = db.query(Invoice).filter_by(reimbursement_id=reimbursement.id).all()
+        vouchers = db.query(Voucher).filter_by(reimbursement_id=reimbursement.id).all()
         
         result = f"## 📋 报销单详情\n\n"
         result += f"| 项目 | 内容 |\n"
@@ -530,21 +606,44 @@ def view_reimbursement_detail(reimbursement_no: str) -> str:
         result += f"| 报销单号 | {reimbursement.reimbursement_no} |\n"
         result += f"| 申请人 | {reimbursement.employee_name}（{reimbursement.employee_id}） |\n"
         result += f"| 部门 | {reimbursement.department_id} |\n"
-        result += f"| 费用类型 | {reimbursement.expense_type} |\n"
-        result += f"| 总金额 | {reimbursement.total_amount:,.2f} 元 |\n"
+        result += f"| 报销类别 | {reimbursement.expense_type} |\n"
+        result += f"| 申请总金额 | {reimbursement.total_amount:,.2f} 元 |\n"
         result += f"| 报销说明 | {reimbursement.description or '-'} |\n"
         result += f"| 当前状态 | {reimbursement.status} |\n"
         result += f"| 确认状态 | {'✅ 已确认' if reimbursement.confirmed else '❌ 未确认'} |\n"
+        if reimbursement.ai_suggestion:
+            result += f"| AI审核建议 | {reimbursement.ai_suggestion} |\n"
         result += f"| 创建时间 | {reimbursement.created_at.strftime('%Y-%m-%d %H:%M')} |\n"
         result += f"| 更新时间 | {reimbursement.updated_at.strftime('%Y-%m-%d %H:%M')} |\n"
         
-        if invoices:
-            result += f"\n### 🧾 发票明细\n\n"
-            result += f"| 发票ID | 发票类型 | 金额（元） | 开票日期 | 合规状态 |\n"
-            result += f"|:---|:---|:---|:---|:---|\n"
-            for inv in invoices:
-                status = "✅ 合规" if inv.is_valid else f"❌ {inv.invalid_reason}"
-                result += f"| {inv.id} | {inv.invoice_type_name or '未知'} | {inv.amount:,.2f} | {inv.invoice_date or '-'} | {status} |\n"
+        # 统一费用明细表：发票和凭证合在一起
+        items = []
+        for inv in invoices:
+            items.append({
+                "sub_expense_type": inv.sub_expense_type or "其他",
+                "description": inv.description or "-",
+                "date": inv.invoice_date or "-",
+                "amount": inv.amount,
+                "remark": "发票",
+                "ai_suggestion": "合规" if inv.is_valid else f"不合规：{inv.invalid_reason}",
+            })
+        for v in vouchers:
+            items.append({
+                "sub_expense_type": v.sub_expense_type or "其他",
+                "description": v.description or "-",
+                "date": v.payment_date or "-",
+                "amount": v.amount,
+                "remark": "凭证",
+                "ai_suggestion": "合规" if v.is_valid else f"不合规：{v.invalid_reason}",
+            })
+        
+        if items:
+            result += f"\n### 🧾 费用明细\n\n"
+            result += f"| 序号 | 费用项目 | 详细说明 | 消费日期 | 金额（元） | 备注 | AI建议 |\n"
+            result += f"|:---|:---|:---|:---|:---|:---|:---|\n"
+            for idx, item in enumerate(items, 1):
+                ai_status = "✅ " + item["ai_suggestion"] if item["ai_suggestion"] == "合规" else "❌ " + item["ai_suggestion"]
+                result += f"| {idx} | {item['sub_expense_type']} | {item['description']} | {item['date']} | {item['amount']:,.2f} | {item['remark']} | {ai_status} |\n"
         
         result += f"\n---\n如需修改报销单信息，请告诉我需要修改的字段和新值；确认无误请回复「确认提交」。"
         
@@ -652,18 +751,20 @@ def submit_for_approval(reimbursement_no: str) -> str:
         invoices = db.query(Invoice).filter_by(reimbursement_id=reimbursement.id).all()
         vouchers = db.query(Voucher).filter_by(reimbursement_id=reimbursement.id).all()
         
-        if not invoices:
-            return f"错误：报销单 {reimbursement_no} 未关联任何发票，无法提交审批"
+        if not invoices and not vouchers:
+            return f"错误：报销单 {reimbursement_no} 未关联任何发票或凭证，无法提交审批"
 
         valid_invoices = [inv for inv in invoices if inv.is_valid]
         invalid_invoices = [inv for inv in invoices if not inv.is_valid]
+        valid_vouchers = [v for v in vouchers if v.is_valid]
+        invalid_vouchers = [v for v in vouchers if not v.is_valid]
         
         voucher_amount = sum(v.amount or 0 for v in vouchers)
         total_with_vouchers = reimbursement.total_amount
         
         budget_sufficient, budget_message = _check_budget_internal(db, reimbursement.department_id, total_with_vouchers)
         
-        ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message)
+        ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message, valid_vouchers, invalid_vouchers)
         reimbursement.status = "pending"
         reimbursement.ai_suggestion = ai_suggestion
         reimbursement.updated_at = datetime.now()

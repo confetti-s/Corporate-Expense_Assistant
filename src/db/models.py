@@ -102,6 +102,8 @@ class Voucher(Base):
     reimbursement_id = Column(Integer, ForeignKey('reimbursements.id'), nullable=True)
     reimbursement_no = Column(String(32), nullable=True)
     sub_expense_type = Column(String(50), nullable=True)  # 费用小分类，如 出差交通、住宿、餐补、餐饮、礼品 等
+    is_valid = Column(Boolean, default=True)
+    invalid_reason = Column(String(200))
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
