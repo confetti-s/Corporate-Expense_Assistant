@@ -47,6 +47,7 @@ class Reimbursements(Base):
     invoice_details = Column(Text, default=None)
     ai_suggestion = Column(Text, default=None)
     applicant_email = Column(String(100))
+    confirmed = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

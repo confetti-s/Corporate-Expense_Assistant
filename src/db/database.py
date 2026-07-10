@@ -200,6 +200,22 @@ def _migrate_add_ai_suggestion():
         print(f"[MIGRATION WARNING] {e}")
 
 
+def _migrate_add_confirmed():
+    try:
+        inspector = inspect(engine)
+        if 'reimbursements' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('reimbursements')]
+        
+        with engine.connect() as conn:
+            if 'confirmed' not in existing_columns:
+                conn.execute(text("ALTER TABLE reimbursements ADD COLUMN confirmed INTEGER DEFAULT 0"))
+                conn.commit()
+                print("[MIGRATION] Added confirmed column to reimbursements")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] {e}")
+
+
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
@@ -211,4 +227,5 @@ def init_db():
     _migrate_add_invoice_valid_fields()
     _migrate_add_source_reimbursement_no()
     _migrate_add_ai_suggestion()
+    _migrate_add_confirmed()
     print("Database initialized successfully")
