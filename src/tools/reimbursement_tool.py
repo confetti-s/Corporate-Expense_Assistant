@@ -1,6 +1,7 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
 from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User, Invoice, Voucher, DepartmentBudget
+from src.tools.compliance_tool import _check_expense_amount, _determine_sub_expense_type
 from datetime import datetime
 from sqlalchemy import func
 import json
@@ -22,8 +23,8 @@ def create_reimbursement(
     创建一条新的报销记录并存入数据库，返回报销单号
     :param employee_id: 员工ID，如 E001
     :param employee_name: 员工姓名
-    :param department_id: 部门ID，如 D001-D005
-    :param expense_type: 费用类型，如 差旅费、招待费、办公用品、交通费、通讯费
+    :param department_id: 部门ID，如 D001-D006
+    :param expense_type: 费用类型（大分类），如 差旅费、业务招待费、日常交通费、办公用品、其他费用
     :param invoice_ids: 发票记录ID列表，用逗号分隔（必填，如"1,2,3"，关联Invoice表中的发票）
     :param description: 报销说明（可选）
     :param invoice_details_json: 发票OCR结果的JSON数组字符串（可选）
@@ -41,6 +42,28 @@ def create_reimbursement(
             inv = db.query(Invoice).filter_by(id=inv_id).first()
             if inv and inv.reimbursement_id is not None:
                 return f"错误：发票记录ID {inv_id}（{inv.invoice_type_name}，{inv.amount:,.2f}元）已关联报销单 {inv.reimbursement_no}，不可重复报销"
+        
+        # 重新进行合规审查，确保 is_valid 状态是最新的
+        user_role = "employee"
+        if employee_id:
+            user = db.query(User).filter_by(user_id=employee_id).first()
+            if user:
+                user_role = user.role
+        
+        for inv_id in id_list:
+            inv = db.query(Invoice).filter_by(id=inv_id).first()
+            if inv:
+                # 先推断并写入小分类，合规检查依赖此字段
+                if not inv.sub_expense_type:
+                    inv.sub_expense_type = _determine_sub_expense_type(inv) or None
+                invalid_reason = _check_expense_amount(expense_type, inv, user_role, employee_id, db)
+                if invalid_reason:
+                    inv.is_valid = False
+                    inv.invalid_reason = invalid_reason
+                else:
+                    inv.is_valid = True
+                    inv.invalid_reason = None
+        db.commit()
         
         valid_invoices = []
         invalid_invoices = []
@@ -81,7 +104,7 @@ def create_reimbursement(
                 pass
 
         reimbursement_no = f"RB{year}{str(next_seq).zfill(4)}"
-        need_special_approval = total_amount > 3000
+        need_special_approval = total_amount >= 10000
 
         if not applicant_email:
             user = db.query(User).filter_by(user_id=employee_id).first()
@@ -120,6 +143,14 @@ def create_reimbursement(
         for v in voucher_list:
             v.reimbursement_id = record.id
             v.reimbursement_no = reimbursement_no
+            # 凭证的小分类默认从报销单大分类推导
+            if not v.sub_expense_type:
+                category_to_default_sub = {
+                    "差旅费": "出差交通",
+                    "业务招待费": "餐饮",
+                    "日常交通费": "市内公务交通",
+                }
+                v.sub_expense_type = category_to_default_sub.get(expense_type)
             linked_voucher_count += 1
         db.commit()
 
@@ -148,6 +179,150 @@ def create_reimbursement(
     except Exception as e:
         db.rollback()
         return f"创建报销单失败：{str(e)}"
+    finally:
+        db.close()
+
+
+@tool("查看报销单详情")
+def view_reimbursement_detail(reimbursement_no: str) -> str:
+    """
+    根据报销单号查看报销单详情，以表格形式展示
+    :param reimbursement_no: 报销单号，如 RB20260001
+    """
+    db = SessionLocal()
+    try:
+        reimbursement = db.query(Reimbursements).filter_by(
+            reimbursement_no=reimbursement_no
+        ).first()
+
+        if not reimbursement:
+            return f"未找到报销单号为 {reimbursement_no} 的记录"
+
+        invoices = db.query(Invoice).filter_by(reimbursement_id=reimbursement.id).all()
+        vouchers = db.query(Voucher).filter_by(reimbursement_id=reimbursement.id).all()
+
+        result = f"## 📋 报销单详情\n\n"
+        result += f"| 项目 | 内容 |\n"
+        result += f"|:---|:---|\n"
+        result += f"| 报销单号 | {reimbursement.reimbursement_no} |\n"
+        result += f"| 申请人 | {reimbursement.employee_name}（{reimbursement.employee_id}） |\n"
+        result += f"| 部门 | {reimbursement.department_id} |\n"
+        result += f"| 费用类型 | {reimbursement.expense_type} |\n"
+        result += f"| 总金额 | {reimbursement.total_amount:,.2f} 元 |\n"
+        result += f"| 报销说明 | {reimbursement.description or '无'} |\n"
+        result += f"| 当前状态 | {reimbursement.status} |\n"
+        if reimbursement.ai_suggestion:
+            result += f"| AI审核建议 | {reimbursement.ai_suggestion.split('】')[0]}】 |\n"
+        result += f"| 创建时间 | {reimbursement.created_at.strftime('%Y-%m-%d %H:%M')} |\n"
+        result += f"| 更新时间 | {reimbursement.updated_at.strftime('%Y-%m-%d %H:%M')} |\n"
+
+        if invoices:
+            result += f"\n### 🧾 发票明细\n\n"
+            result += f"| 发票ID | 发票类型 | 金额（元） | 开票日期 | 合规状态 |\n"
+            result += f"|:---|:---|:---|:---|:---|\n"
+            for inv in invoices:
+                status = "✅ 合规" if inv.is_valid else f"❌ {inv.invalid_reason}"
+                result += f"| {inv.id} | {inv.invoice_type_name or '未知'} | {inv.amount:,.2f} | {inv.invoice_date or '未识别'} | {status} |\n"
+
+        if vouchers:
+            result += f"\n### 📄 凭证明细\n\n"
+            result += f"| 凭证ID | 金额（元） | 描述 |\n"
+            result += f"|:---|:---|:---|\n"
+            for v in vouchers:
+                result += f"| {v.id} | {v.amount or 0:,.2f} | {v.description or '无'} |\n"
+
+        result += f"\n---\n如需修改报销单信息，请告诉我需要修改的字段和新值；确认无误请回复「确认提交」。"
+
+        return result
+    except Exception as e:
+        return f"查询报销单详情失败：{str(e)}"
+    finally:
+        db.close()
+
+
+@tool("修改报销单")
+def update_reimbursement(
+    reimbursement_no: str,
+    expense_type: str = "",
+    description: str = ""
+) -> str:
+    """
+    修改报销单信息（仅允许修改费用类型和报销说明）
+    :param reimbursement_no: 报销单号，如 RB20260001
+    :param expense_type: 新的费用类型（可选）
+    :param description: 新的报销说明（可选）
+    """
+    db = SessionLocal()
+    try:
+        reimbursement = db.query(Reimbursements).filter_by(
+            reimbursement_no=reimbursement_no
+        ).first()
+
+        if not reimbursement:
+            return f"未找到报销单号为 {reimbursement_no} 的记录"
+
+        if reimbursement.status not in ("draft", "rejected"):
+            return f"错误：报销单 {reimbursement_no} 当前状态为「{reimbursement.status}」，无法修改"
+
+        changes = []
+        if expense_type:
+            old_type = reimbursement.expense_type
+            reimbursement.expense_type = expense_type
+            changes.append(f"费用类型：{old_type} → {expense_type}")
+
+        if description:
+            old_desc = reimbursement.description or "无"
+            reimbursement.description = description
+            changes.append(f"报销说明：{old_desc[:20]}{'...' if len(old_desc) > 20 else ''} → {description[:20]}{'...' if len(description) > 20 else ''}")
+
+        if not changes:
+            return "未提供任何修改内容，请指定需要修改的字段（费用类型或报销说明）"
+
+        reimbursement.updated_at = datetime.now()
+        db.commit()
+
+        result = f"报销单 {reimbursement_no} 修改成功！\n\n"
+        for change in changes:
+            result += f"✓ {change}\n"
+        result += f"\n修改后的报销单详情：\n[[查看报销单详情]]"
+
+        return result
+    except Exception as e:
+        db.rollback()
+        return f"修改报销单失败：{str(e)}"
+    finally:
+        db.close()
+
+
+@tool("确认报销单")
+def confirm_reimbursement(reimbursement_no: str) -> str:
+    """
+    确认报销单，标记为已确认状态，确认后才能提交审批
+    :param reimbursement_no: 报销单号，如 RB20260001
+    """
+    db = SessionLocal()
+    try:
+        reimbursement = db.query(Reimbursements).filter_by(
+            reimbursement_no=reimbursement_no
+        ).first()
+
+        if not reimbursement:
+            return f"未找到报销单号为 {reimbursement_no} 的记录"
+
+        if reimbursement.status != "draft":
+            return f"错误：报销单 {reimbursement_no} 当前状态为「{reimbursement.status}」，只有草稿状态才能确认"
+
+        if reimbursement.confirmed:
+            return f"报销单 {reimbursement_no} 已确认，无需重复确认"
+
+        reimbursement.confirmed = True
+        reimbursement.updated_at = datetime.now()
+        db.commit()
+
+        return f"报销单 {reimbursement_no} 已确认！\n\n确认后您可以提交审批，或继续修改报销单信息。\n[[提交审批]]"
+    except Exception as e:
+        db.rollback()
+        return f"确认报销单失败：{str(e)}"
     finally:
         db.close()
 
@@ -186,14 +361,29 @@ def _check_budget_internal(db, department_id, amount):
 
 
 def _determine_expense_type(invoices):
+    """根据发票推断报销单大分类（取多数小分类对应的大分类）"""
+    sub_to_category = {
+        "出差交通": "差旅费",
+        "住宿": "差旅费",
+        "餐补": "差旅费",
+        "餐饮": "业务招待费",
+        "礼品": "业务招待费",
+        "市内公务交通": "日常交通费",
+        "停车费": "日常交通费",
+        "高速费": "日常交通费",
+        "办公用品": "办公用品",
+        "快递": "其他费用",
+        "打印": "其他费用",
+    }
     type_counts = {}
     for inv in invoices:
-        if inv.invoice_type_name:
-            type_counts[inv.invoice_type_name] = type_counts.get(inv.invoice_type_name, 0) + 1
-    
+        sub = inv.sub_expense_type or _determine_sub_expense_type(inv)
+        category = sub_to_category.get(sub, "其他费用")
+        type_counts[category] = type_counts.get(category, 0) + 1
+
     if not type_counts:
-        return "其他"
-    
+        return "其他费用"
+
     return max(type_counts, key=type_counts.get)
 
 
@@ -299,9 +489,9 @@ def _create_approval_records(db, reimbursement):
         return f"错误：部门 {reimbursement.department_id} 未配置审批人"
     
     amount = reimbursement.total_amount
-    if amount <= 1000:
+    if amount < 2000:
         levels = 1
-    elif amount <= 3000:
+    elif amount < 10000:
         levels = 2
     else:
         levels = 3
@@ -376,6 +566,9 @@ def submit_for_approval(reimbursement_no: str) -> str:
 
         if reimbursement.status not in ("draft", "rejected"):
             return f"错误：报销单 {reimbursement_no} 当前状态为「{reimbursement.status}」，无法提交审批。只有草稿或已驳回状态可以提交"
+
+        if not reimbursement.confirmed:
+            return f"错误：报销单 {reimbursement_no} 尚未确认，请先查看报销单详情并确认后再提交审批。\n[[查看报销单详情]]"
 
         invoices = db.query(Invoice).filter_by(reimbursement_id=reimbursement.id).all()
         vouchers = db.query(Voucher).filter_by(reimbursement_id=reimbursement.id).all()
