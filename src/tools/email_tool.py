@@ -79,6 +79,10 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
         if not approver_user or not approver_user.email:
             return f"审批人 {approver_rec.approver_name}（{approver_rec.approver_id}）未设置邮箱"
 
+        ai_suggestion_text = ""
+        if reimb.ai_suggestion:
+            ai_suggestion_text = f"\n\nAI审核建议：\n{reimb.ai_suggestion}"
+
         from src.tools.pdf_tool import auto_generate_pdf
         pdf_path = auto_generate_pdf(reimbursement_no)
 
@@ -90,7 +94,8 @@ def notify_approver(reimbursement_no: str, attachment_path: str = None) -> str:
             f"部门：{reimb.department_id}\n"
             f"费用类型：{reimb.expense_type}\n"
             f"金额：{reimb.total_amount:,.2f} 元\n"
-            f"说明：{reimb.description or '无'}\n\n"
+            f"说明：{reimb.description or '无'}\n"
+            f"{ai_suggestion_text}\n\n"
             f"请及时登录系统进行审批。"
         )
 
