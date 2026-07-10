@@ -459,48 +459,6 @@ def _check_budget_internal(db, department_id, amount):
         return False, f"预算不足，剩余 {remaining:,.2f} 元，超出 {amount - remaining:,.2f} 元"
 
 
-def _determine_expense_type(invoices):
-    """根据发票推断报销单大分类（取多数小分类对应的大分类）"""
-    sub_to_category = {
-        "出差交通": "差旅费",
-        "住宿": "差旅费",
-        "餐补": "差旅费",
-        "餐饮": "业务招待费",
-        "礼品": "业务招待费",
-        "市内公务交通": "日常交通费",
-        "停车费": "日常交通费",
-        "高速费": "日常交通费",
-        "办公用品": "办公用品",
-        "快递": "其他费用",
-        "打印": "其他费用",
-    }
-    type_counts = {}
-    for inv in invoices:
-        sub = inv.sub_expense_type or _determine_sub_expense_type(inv)
-        category = sub_to_category.get(sub, "其他费用")
-        type_counts[category] = type_counts.get(category, 0) + 1
-
-    if not type_counts:
-        return "其他费用"
-
-    return max(type_counts, key=type_counts.get)
-
-
-def _build_invoice_details(invoices):
-    details = []
-    for inv in invoices:
-        details.append({
-            "type_name": inv.invoice_type_name or "",
-            "amount": inv.amount,
-            "invoice_code": inv.invoice_code or "",
-            "invoice_number": inv.invoice_number or "",
-            "seller_name": inv.seller_name or "",
-            "invoice_date": inv.invoice_date or "",
-            "file_path": inv.file_path or ""
-        })
-    return json.dumps(details, ensure_ascii=False)
-
-
 def _create_approval_records(db, reimbursement):
     dept_approvers = db.query(DepartmentApprover).filter_by(
         department_id=reimbursement.department_id
