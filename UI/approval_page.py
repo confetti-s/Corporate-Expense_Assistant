@@ -9,7 +9,7 @@ from src.tools.approval_tool import approve_or_reject_reimbursement
 
 
 def load_pending_for_approver(user_state):
-    if not user_state or user_state['role'] not in ('manager', 'admin'):
+    if not user_state or user_state['role'] not in ('manager', 'director', 'general_manager', 'admin'):
         return pd.DataFrame(columns=["报销单号", "申请人", "部门", "金额(元)", "费用类型", "审批级别", "审批状态"])
 
     db = SessionLocal()

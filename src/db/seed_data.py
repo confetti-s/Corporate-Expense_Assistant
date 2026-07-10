@@ -14,6 +14,7 @@ def seed_department_budget(db: Session):
         {"department_id": "D003", "department_name": "财务部", "budget_amount": 100000.0},
         {"department_id": "D004", "department_name": "人力资源部", "budget_amount": 80000.0},
         {"department_id": "D005", "department_name": "销售部", "budget_amount": 800000.0},
+        {"department_id": "D006", "department_name": "行政部", "budget_amount": 200000.0},
     ]
 
     for dept in departments:
@@ -44,26 +45,41 @@ def seed_users(db: Session):
         {"user_id": "E003", "username": "wangwu", "name": "王五", "department_id": "D003", "email": "wangwu@example.com"},
         {"user_id": "E004", "username": "zhaoliu", "name": "赵六", "department_id": "D004", "email": "zhaoliu@example.com"},
         {"user_id": "E005", "username": "qianqi", "name": "钱七", "department_id": "D005", "email": "qianqi@example.com"},
+        {"user_id": "E006", "username": "zhousan", "name": "周芳", "department_id": "D006", "email": "zhousan@example.com"},
     ]
 
     managers = [
         # D001 技术部
         {"user_id": "S001", "username": "sunjl", "name": "孙经理", "department_id": "D001", "email": "sunjl@example.com"},
-        {"user_id": "S002", "username": "shenzj", "name": "沈总监", "department_id": "D001", "email": "shenzj@example.com"},
         # D002 市场部
         {"user_id": "M001", "username": "majl", "name": "马经理", "department_id": "D002", "email": "yin_20041128@qq.com"},
-        {"user_id": "M002", "username": "miaozj", "name": "苗总监", "department_id": "D002", "email": "miaozj@example.com"},
         # D003 财务部
         {"user_id": "F001", "username": "fangjl", "name": "方经理", "department_id": "D003", "email": "fangjl@example.com"},
-        {"user_id": "F002", "username": "fanzj", "name": "范总监", "department_id": "D003", "email": "fanzj@example.com"},
         # D004 人力资源部
         {"user_id": "H001", "username": "hejl", "name": "何经理", "department_id": "D004", "email": "hejl@example.com"},
-        {"user_id": "H002", "username": "hezj", "name": "贺总监", "department_id": "D004", "email": "hezj@example.com"},
         # D005 销售部
         {"user_id": "X001", "username": "xiangjl", "name": "项经理", "department_id": "D005", "email": "xiangjl@example.com"},
+        # D006 行政部
+        {"user_id": "G001", "username": "guojl", "name": "郭经理", "department_id": "D006", "email": "guojl@example.com"},
+    ]
+
+    directors = [
+        # D001 技术部
+        {"user_id": "S002", "username": "shenzj", "name": "沈总监", "department_id": "D001", "email": "shenzj@example.com"},
+        # D002 市场部
+        {"user_id": "M002", "username": "miaozj", "name": "苗总监", "department_id": "D002", "email": "miaozj@example.com"},
+        # D003 财务部
+        {"user_id": "F002", "username": "fanzj", "name": "范总监", "department_id": "D003", "email": "fanzj@example.com"},
+        # D004 人力资源部
+        {"user_id": "H002", "username": "hezj", "name": "贺总监", "department_id": "D004", "email": "hezj@example.com"},
+        # D005 销售部
         {"user_id": "X002", "username": "xiezj", "name": "谢总监", "department_id": "D005", "email": "xiezj@example.com"},
-        # L3 统一
-        {"user_id": "A003", "username": "wufz", "name": "吴副总", "department_id": None, "email": "wufz@example.com"},
+        # D006 行政部
+        {"user_id": "G002", "username": "gaozj", "name": "高总监", "department_id": "D006", "email": "gaozj@example.com"},
+    ]
+
+    general_managers = [
+        {"user_id": "A003", "username": "wufz", "name": "吴总经理", "department_id": None, "email": "wufz@example.com"},
     ]
 
     for emp in employees:
@@ -78,6 +94,20 @@ def seed_users(db: Session):
             user_id=mgr["user_id"], username=mgr["username"],
             password_hash=password, role="manager", name=mgr["name"],
             email=mgr["email"], department_id=mgr["department_id"],
+        ))
+
+    for dir_ in directors:
+        db.add(User(
+            user_id=dir_["user_id"], username=dir_["username"],
+            password_hash=password, role="director", name=dir_["name"],
+            email=dir_["email"], department_id=dir_["department_id"],
+        ))
+
+    for gm in general_managers:
+        db.add(User(
+            user_id=gm["user_id"], username=gm["username"],
+            password_hash=password, role="general_manager", name=gm["name"],
+            email=gm["email"], department_id=gm["department_id"],
         ))
 
     # 管理员
@@ -100,23 +130,27 @@ def seed_department_approvers(db: Session):
         # D001 技术部
         {"department_id": "D001", "approval_level": 1, "approver_id": "S001", "approver_name": "孙经理"},
         {"department_id": "D001", "approval_level": 2, "approver_id": "S002", "approver_name": "沈总监"},
-        {"department_id": "D001", "approval_level": 3, "approver_id": "A003", "approver_name": "吴副总"},
+        {"department_id": "D001", "approval_level": 3, "approver_id": "A003", "approver_name": "吴总经理"},
         # D002 市场部
         {"department_id": "D002", "approval_level": 1, "approver_id": "M001", "approver_name": "马经理"},
         {"department_id": "D002", "approval_level": 2, "approver_id": "M002", "approver_name": "苗总监"},
-        {"department_id": "D002", "approval_level": 3, "approver_id": "A003", "approver_name": "吴副总"},
+        {"department_id": "D002", "approval_level": 3, "approver_id": "A003", "approver_name": "吴总经理"},
         # D003 财务部
         {"department_id": "D003", "approval_level": 1, "approver_id": "F001", "approver_name": "方经理"},
         {"department_id": "D003", "approval_level": 2, "approver_id": "F002", "approver_name": "范总监"},
-        {"department_id": "D003", "approval_level": 3, "approver_id": "A003", "approver_name": "吴副总"},
+        {"department_id": "D003", "approval_level": 3, "approver_id": "A003", "approver_name": "吴总经理"},
         # D004 人力资源部
         {"department_id": "D004", "approval_level": 1, "approver_id": "H001", "approver_name": "何经理"},
         {"department_id": "D004", "approval_level": 2, "approver_id": "H002", "approver_name": "贺总监"},
-        {"department_id": "D004", "approval_level": 3, "approver_id": "A003", "approver_name": "吴副总"},
+        {"department_id": "D004", "approval_level": 3, "approver_id": "A003", "approver_name": "吴总经理"},
         # D005 销售部
         {"department_id": "D005", "approval_level": 1, "approver_id": "X001", "approver_name": "项经理"},
         {"department_id": "D005", "approval_level": 2, "approver_id": "X002", "approver_name": "谢总监"},
-        {"department_id": "D005", "approval_level": 3, "approver_id": "A003", "approver_name": "吴副总"},
+        {"department_id": "D005", "approval_level": 3, "approver_id": "A003", "approver_name": "吴总经理"},
+        # D006 行政部
+        {"department_id": "D006", "approval_level": 1, "approver_id": "G001", "approver_name": "郭经理"},
+        {"department_id": "D006", "approval_level": 2, "approver_id": "G002", "approver_name": "高总监"},
+        {"department_id": "D006", "approval_level": 3, "approver_id": "A003", "approver_name": "吴总经理"},
     ]
 
     for a in approvers:
@@ -127,7 +161,7 @@ def seed_department_approvers(db: Session):
 
 def seed_reimbursements(db: Session):
     statuses = ["pending", "reviewing", "approved", "rejected"]
-    expense_types = ["差旅费", "招待费", "办公用品", "交通费", "通讯费"]
+    expense_types = ["差旅费", "业务招待费", "办公用品", "日常交通费", "其他费用"]
     employees = [
         ("E001", "张三", "D001"),
         ("E002", "李四", "D002"),
@@ -167,7 +201,7 @@ def seed_reimbursements(db: Session):
             total_amount=amount,
             description=f"报销{random.choice(expense_types)}",
             status=status,
-            need_special_approval=amount > 3000,
+            need_special_approval=amount > 10000,
             invoice_details=json.dumps([{
                 "type_name": inv_type,
                 "amount": amount,
@@ -221,9 +255,9 @@ def seed_approval_records(db: Session):
             continue
 
         amount = reimbursement.total_amount
-        if amount <= 1000:
+        if amount < 2000:
             levels = 1
-        elif amount <= 3000:
+        elif amount < 10000:
             levels = 2
         else:
             levels = 3
