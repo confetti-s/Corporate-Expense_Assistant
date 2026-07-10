@@ -158,7 +158,7 @@ OCR识别后，必须为每张发票调用 `update_invoice_description(invoice_i
 调用 `generate_reimbursement_pdf` 生成报销单PDF。
 
 > **注意**：`submit_for_approval` 函数内部已自动处理邮件通知：
-> - 合规发票合并的报销单AI自动通过后，系统会自动发送邮件通知审批人知悉
+> - 合规发票合并的报销单提交后，系统会自动发送邮件通知审批人
 > - 不合规发票拆分的报销单，系统会自动发送邮件通知审批人处理
 > - **请勿手动调用 notify_approver 或 send_email**，以免造成重复通知
 

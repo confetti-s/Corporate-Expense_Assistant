@@ -216,7 +216,58 @@ def _migrate_add_confirmed():
         print(f"[MIGRATION WARNING] {e}")
 
 
+def _migrate_add_invoice_sub_expense_type_and_description():
+    try:
+        inspector = inspect(engine)
+        if 'invoices' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('invoices')]
+
+        with engine.connect() as conn:
+            if 'sub_expense_type' not in existing_columns:
+                conn.execute(text("ALTER TABLE invoices ADD COLUMN sub_expense_type VARCHAR(50)"))
+                print("[MIGRATION] Added sub_expense_type column to invoices")
+
+            if 'description' not in existing_columns:
+                conn.execute(text("ALTER TABLE invoices ADD COLUMN description VARCHAR(500)"))
+                print("[MIGRATION] Added description column to invoices")
+
+            conn.commit()
+    except Exception as e:
+        print(f"[MIGRATION WARNING] {e}")
+
+
+def _migrate_add_voucher_sub_expense_type():
+    try:
+        inspector = inspect(engine)
+        if 'vouchers' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('vouchers')]
+
+        with engine.connect() as conn:
+            if 'sub_expense_type' not in existing_columns:
+                conn.execute(text("ALTER TABLE vouchers ADD COLUMN sub_expense_type VARCHAR(50)"))
+                conn.commit()
+                print("[MIGRATION] Added sub_expense_type column to vouchers")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] {e}")
+
+
 def init_db():
+    from src.db.models import Base
+    Base.metadata.create_all(bind=engine)
+    _migrate_ensure_user_id_unique()
+    _migrate_add_invoice_details()
+    _migrate_add_applicant_email()
+    _migrate_add_chat_history()
+    _migrate_add_session_id()
+    _migrate_add_invoice_valid_fields()
+    _migrate_add_invoice_sub_expense_type_and_description()
+    _migrate_add_voucher_sub_expense_type()
+    _migrate_add_source_reimbursement_no()
+    _migrate_add_ai_suggestion()
+    _migrate_add_confirmed()
+    print("Database initialized successfully")
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
     _migrate_ensure_user_id_unique()
