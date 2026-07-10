@@ -1,0 +1,233 @@
+{% extends "base.html" %}
+{% set active_page = 'chat' %}
+{% block title %}FinFlow - Chat Reimbursement{% endblock %}
+
+{% block content %}
+<div class="p-lg flex gap-lg h-[calc(100vh-64px)] overflow-hidden">
+    <!-- Left Sidebar: Upload Area -->
+    <section class="w-1/3 flex flex-col gap-lg">
+        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-xl flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary hover:bg-surface-container-low transition-all" id="upload-area">
+            <div class="w-20 h-20 rounded-full bg-primary/5 flex items-center justify-center mb-md group-hover:scale-110 transition-transform">
+                <span class="material-symbols-outlined text-primary text-[48px]">cloud_upload</span>
+            </div>
+            <h3 class="font-headline-sm text-headline-sm text-primary mb-xs">上传区域 Upload Area</h3>
+            <p class="font-body-md text-body-md text-on-surface-variant mb-lg">Drag and drop receipts here or click to browse</p>
+            <div class="flex flex-wrap justify-center gap-sm">
+                <span class="px-sm py-1 bg-surface-variant text-primary font-label-sm text-label-sm rounded uppercase">JPG</span>
+                <span class="px-sm py-1 bg-surface-variant text-primary font-label-sm text-label-sm rounded uppercase">PNG</span>
+                <span class="px-sm py-1 bg-surface-variant text-primary font-label-sm text-label-sm rounded uppercase">PDF</span>
+            </div>
+            <input type="file" id="file-input" class="hidden" accept=".jpg,.jpeg,.png,.pdf" multiple onchange="handleFileUpload(event)"/>
+        </div>
+        <!-- Receipt Preview -->
+        <div class="h-64 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden p-md">
+            <div class="flex justify-between items-center mb-sm">
+                <span class="font-label-md text-label-md font-bold text-on-surface-variant">RECENT RECEIPTS</span>
+                <span class="material-symbols-outlined text-outline cursor-pointer">more_horiz</span>
+            </div>
+            <div class="grid grid-cols-2 gap-sm h-[calc(100%-32px)]" id="recent-receipts">
+                <div class="bg-surface-container rounded-lg flex items-center justify-center text-label-sm text-on-surface-variant">暂无发票</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Right Panel: Chat Interface -->
+    <section class="flex-1 flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+        <!-- Chat Header -->
+        <div class="px-lg py-md border-b border-outline-variant flex justify-between items-center bg-white">
+            <div class="flex items-center gap-sm">
+                <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center">
+                    <span class="material-symbols-outlined text-on-primary">smart_toy</span>
+                </div>
+                <div>
+                    <h2 class="font-headline-sm text-headline-sm">对话界面 Chat Interface</h2>
+                    <p class="text-[10px] font-label-md text-primary flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        AI Assistant Online
+                    </p>
+                </div>
+            </div>
+            <div class="flex gap-xs">
+                <button class="p-xs text-outline hover:text-primary transition-colors" onclick="clearChat()"><span class="material-symbols-outlined">refresh</span></button>
+                <button class="p-xs text-outline hover:text-primary transition-colors"><span class="material-symbols-outlined">archive</span></button>
+            </div>
+        </div>
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto p-lg space-y-xl chat-container bg-[#F8FAFC]" id="chat-messages">
+            <div class="flex justify-start">
+                <div class="flex gap-sm max-w-[85%]">
+                    <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
+                        <span class="material-symbols-outlined text-primary text-[18px]">bolt</span>
+                    </div>
+                    <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
+                        <p class="font-body-md text-body-md text-on-surface">您好！我是FinFlow报销助手。<br/>您可以上传发票图片，或者直接告诉我您要报销的费用，我会帮您完成报销流程。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Chat Footer -->
+        <div class="p-lg border-t border-outline-variant bg-white">
+            <div class="flex gap-sm mb-lg">
+                <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="document.getElementById('file-input').click()">
+                    <span class="material-symbols-outlined text-[18px]">upload_file</span>
+                    上传发票 Upload Invoice
+                </button>
+                <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="window.location.href='/progress'">
+                    <span class="material-symbols-outlined text-[18px]">analytics</span>
+                    查看进度 Check Progress
+                </button>
+                <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="window.location.href='/budget'">
+                    <span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
+                    查看预算 View Budget
+                </button>
+            </div>
+            <div class="relative">
+                <textarea id="chat-input" class="w-full bg-surface-container-low border border-outline-variant rounded-xl px-md py-md font-body-md text-body-md focus:ring-2 focus:ring-primary focus:border-transparent min-h-[56px] pr-24 resize-none" placeholder="Type a message or use the buttons above..." onkeydown="handleChatKeydown(event)"></textarea>
+                <div class="absolute right-md bottom-1/2 translate-y-1/2 flex gap-sm">
+                    <button class="bg-primary text-on-primary w-10 h-10 rounded-lg flex items-center justify-center shadow-md hover:bg-primary-container transition-all active:scale-90" onclick="sendMessage()">
+                        <span class="material-symbols-outlined">send</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </section>
+</div>
+
+<script>
+let currentSessionId = null;
+
+// 上传区域点击
+document.getElementById('upload-area').addEventListener('click', function(e) {
+    if (e.target.tagName !== 'INPUT') {
+        document.getElementById('file-input').click();
+    }
+});
+
+document.getElementById('upload-area').addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.currentTarget.classList.add('bg-primary/5', 'border-primary');
+});
+document.getElementById('upload-area').addEventListener('dragleave', (e) => {
+    e.currentTarget.classList.remove('bg-primary/5', 'border-primary');
+});
+document.getElementById('upload-area').addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.currentTarget.classList.remove('bg-primary/5', 'border-primary');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+        handleFiles(files);
+    }
+});
+
+function handleFileUpload(event) {
+    const files = event.target.files;
+    if (files.length > 0) handleFiles(files);
+}
+
+async function handleFiles(files) {
+    // Show uploading indicator
+    const fileNames = Array.from(files).map(f => f.name).join(', ');
+    const statusEl = addAIMessage(`正在上传 ${files.length} 个文件...`);
+
+    try {
+        const result = await uploadInvoices(files);
+        const uploaded = result.files.filter(f => f.success);
+        const failed = result.files.filter(f => !f.success);
+
+        if (uploaded.length === 0) {
+            statusEl.textContent = '文件上传失败：' + (failed[0]?.error || '未知错误');
+            return;
+        }
+
+        const filePaths = uploaded.map(f => f.file_path).join(', ');
+        statusEl.textContent = `已上传 ${uploaded.length} 个文件${failed.length > 0 ? '（' + failed.length + ' 个失败）' : ''}，正在提交AI识别...`;
+
+        // Build message with file paths
+        const msg = files.length > 1
+            ? `我上传了${uploaded.length}张发票，文件路径: ${filePaths}，请帮我识别并创建报销单`
+            : `我上传了一张发票，文件路径: ${filePaths}，请帮我识别并创建报销单`;
+
+        document.getElementById('chat-input').value = msg;
+        sendMessage();
+    } catch (err) {
+        statusEl.textContent = '文件上传失败：' + err.message;
+    }
+}
+
+function addUserMessage(text) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'flex justify-end';
+    div.innerHTML = `<div class="max-w-[80%] bg-white border border-outline-variant p-md rounded-xl rounded-tr-none shadow-sm">
+        <p class="font-body-md text-body-md text-on-surface">${escapeHtml(text)}</p>
+        <span class="text-[10px] text-outline mt-xs block text-right">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+    </div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function addAIMessage(initialText) {
+    const container = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'flex justify-start';
+    div.innerHTML = `<div class="flex gap-sm max-w-[85%]">
+        <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
+            <span class="material-symbols-outlined text-primary text-[18px]">bolt</span>
+        </div>
+        <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
+            <p class="font-body-md text-body-md text-on-surface" id="ai-msg-${Date.now()}">${escapeHtml(initialText || '')}</p>
+        </div>
+    </div>`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+    return div.querySelector('p');
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    input.value = '';
+    addUserMessage(message);
+
+    const aiMsgEl = addAIMessage('');
+
+    try {
+        const result = await sendChatMessage(message, currentSessionId, (chunk, fullText) => {
+            aiMsgEl.textContent = fullText;
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+        });
+        currentSessionId = result.sessionId;
+        if (result.text) {
+            aiMsgEl.textContent = result.text;
+        } else if (!aiMsgEl.textContent || aiMsgEl.textContent === '') {
+            aiMsgEl.textContent = 'AI助手未返回内容，请检查API配置或稍后重试。';
+        }
+    } catch (err) {
+        aiMsgEl.textContent = '抱歉，处理您的请求时出错：' + err.message;
+    }
+}
+
+function handleChatKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+}
+
+function clearChat() {
+    currentSessionId = null;
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '';
+    addAIMessage('您好！我是FinFlow报销助手。会话已重置，请告诉我您需要什么帮助。');
+}
+</script>
+{% endblock %}

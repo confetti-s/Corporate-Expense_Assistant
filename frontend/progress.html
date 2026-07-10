@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FinFlow - Progress Tracking</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "on-tertiary-fixed": "#191c1e",
+                        "on-background": "#0d1c2e",
+                        "secondary-fixed": "#d4e3ff",
+                        "tertiary-container": "#484c4e",
+                        "on-error-container": "#93000a",
+                        "error": "#ba1a1a",
+                        "outline-variant": "#c4c5d5",
+                        "on-error": "#ffffff",
+                        "on-secondary-container": "#003c70",
+                        "inverse-primary": "#b8c4ff",
+                        "surface-container-low": "#eff4ff",
+                        "surface-variant": "#d5e3fc",
+                        "inverse-on-surface": "#eaf1ff",
+                        "secondary-fixed-dim": "#a4c9ff",
+                        "primary-fixed": "#dde1ff",
+                        "primary-fixed-dim": "#b8c4ff",
+                        "on-primary-container": "#a8b8ff",
+                        "secondary-container": "#64a8fe",
+                        "tertiary-fixed-dim": "#c4c7c9",
+                        "tertiary-fixed": "#e0e3e5",
+                        "on-surface-variant": "#444653",
+                        "error-container": "#ffdad6",
+                        "surface": "#f8f9ff",
+                        "surface-container": "#e6eeff",
+                        "primary": "#00288e",
+                        "surface-dim": "#ccdbf3",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-container": "#b9bcbe",
+                        "on-primary-fixed-variant": "#173bab",
+                        "tertiary": "#323537",
+                        "background": "#f8f9ff",
+                        "on-surface": "#0d1c2e",
+                        "on-secondary-fixed-variant": "#004883",
+                        "on-secondary": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "inverse-surface": "#233144",
+                        "on-secondary-fixed": "#001c39",
+                        "on-tertiary-fixed-variant": "#444749",
+                        "surface-bright": "#f8f9ff",
+                        "surface-container-highest": "#d5e3fc",
+                        "surface-container-high": "#dce9ff",
+                        "on-primary-fixed": "#001453",
+                        "outline": "#757684",
+                        "primary-container": "#1e40af",
+                        "secondary": "#0060ac",
+                        "surface-tint": "#3755c3",
+                        "on-tertiary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "xl": "32px",
+                        "sm": "8px",
+                        "lg": "24px",
+                        "xs": "4px",
+                        "margin-desktop": "32px",
+                        "gutter": "20px",
+                        "sidebar-width": "260px",
+                        "margin-mobile": "16px",
+                        "base": "4px",
+                        "md": "16px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-sm": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "display-lg-mobile": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "display-lg": ["Inter"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                        "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                        "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                        "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                        "display-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                        "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                        "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                    }
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        .sidebar-active-indicator { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+        .detail-drawer { transform: translateX(100%); transition: transform 0.3s ease-in-out; }
+        .detail-drawer.open { transform: translateX(0); }
+        .row-hover:hover { background-color: rgba(0, 40, 142, 0.04); }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen">
+<!-- SideNavBar Shell -->
+<aside class="bg-primary dark:bg-primary-container w-[260px] h-full fixed left-0 top-0 border-r border-outline-variant flex flex-col py-lg z-50" id="sidebar">
+<div class="px-md mb-xl">
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary">FinFlow Corp</h1>
+<p class="text-on-primary/70 font-label-md text-label-md">Enterprise Finance</p>
+</div>
+<nav class="flex-1 space-y-xs">
+<!-- Navigation Items Mapping from JSON -->
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined">chat_bubble</span>
+<span>智能报销 Chat Reimbursement</span>
+</div>
+<!-- ACTIVE ITEM: Progress Tracking -->
+<div class="flex items-center gap-md px-md py-sm text-on-primary opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10 cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined">account_tree</span>
+<span>进度查询 Progress Tracking</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined">pie_chart</span>
+<span>预算概览 Budget Overview</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined">rule</span>
+<span>审批中心 Approval Center</span>
+</div>
+</nav>
+<div class="px-md mt-auto space-y-sm">
+<button class="w-full bg-surface-container-lowest text-primary font-bold py-md rounded-lg flex items-center justify-center gap-sm hover:bg-primary-fixed transition-colors active:scale-95">
+<span class="material-symbols-outlined">add</span>
+                New Report
+            </button>
+<div class="pt-lg border-t border-on-primary/10">
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 hover:opacity-100 cursor-pointer font-label-md text-label-md">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 hover:opacity-100 cursor-pointer font-label-md text-label-md">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="h-16 w-full sticky top-0 z-40 bg-surface dark:bg-surface-dim border-b border-outline-variant flex justify-between items-center px-margin-desktop ml-[260px] max-w-[calc(100%-260px)]">
+<div class="flex items-center gap-xl w-full">
+<div class="relative w-96">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="w-full pl-10 pr-4 py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-md font-body-md focus:border-primary outline-none transition-all" placeholder="Search reimbursement ID or vendor..." type="text"/>
+</div>
+<div class="flex items-center gap-md text-on-surface-variant font-label-md text-label-md">
+<span class="material-symbols-outlined">language</span>
+<span class="cursor-pointer hover:text-primary">English/中文</span>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-sm">
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container-high transition-colors relative">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full"></span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary rounded-full hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined">help_outline</span>
+</button>
+</div>
+<div class="flex items-center gap-sm pl-md border-l border-outline-variant">
+<div class="text-right">
+<p class="text-label-md font-bold text-on-surface">Chen Wei</p>
+<p class="text-label-sm text-on-surface-variant">Marketing Director</p>
+</div>
+<img class="w-10 h-10 rounded-full border border-outline-variant" data-alt="Professional headshot of a corporate executive in a sharp navy blazer, set against a clean, architectural office background with soft bokeh lighting. The style is bright and high-key to match the modern enterprise UI aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCnY__YUOputU7m4ZwreM3Km4jro-nw-izfN8Q4bi8V_YtJi62LWPGhwHezwthGoEQ86a6rSSorwbNsT0xaZI8gCRevUX1Qyj9tqyOqs_eH9l1OqRE9dYpoJ4pdhEHUq607sOtNaW8MMbbPFnIbk5LDvx7tSqxZbDnLSXx0m4HVr9zo7BZrdwvgso6Aqax75BPo7MuArlTDtb76m7TL9_R-x1ktfghIzFv4g6O4iDeCwwpml6rlcMC6LqDBzCn8oszgYxJD-eZt0XA"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-[260px] p-xl">
+<!-- Page Header & Filters -->
+<div class="mb-xl flex items-end justify-between">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-surface mb-xs">报销进度查询</h2>
+<p class="text-body-lg text-on-surface-variant font-body-lg">Progress Tracking &amp; History</p>
+</div>
+<div class="flex gap-md">
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface-variant block">日期范围 Date Range Filter</label>
+<div class="flex items-center gap-sm px-md py-2 bg-white border border-outline-variant rounded-lg cursor-pointer hover:border-primary transition-all">
+<span class="material-symbols-outlined text-outline">calendar_today</span>
+<span class="text-body-md font-body-md">2026-01-01 ~ 2026-03-31</span>
+<span class="material-symbols-outlined text-outline">expand_more</span>
+</div>
+</div>
+<div class="space-y-xs">
+<label class="font-label-md text-label-md text-on-surface-variant block">Status Filter</label>
+<div class="flex items-center gap-sm px-md py-2 bg-white border border-outline-variant rounded-lg cursor-pointer hover:border-primary transition-all">
+<span class="text-body-md font-body-md">All Statuses</span>
+<span class="material-symbols-outlined text-outline">filter_list</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Progress Bento Grid (Metrics) -->
+<div class="grid grid-cols-4 gap-lg mb-xl">
+<div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+<div class="flex items-center justify-between mb-md">
+<span class="p-2 bg-secondary-container/10 text-secondary rounded-lg">
+<span class="material-symbols-outlined">pending_actions</span>
+</span>
+<span class="text-label-sm text-on-surface-variant font-label-sm">+2 from yesterday</span>
+</div>
+<div>
+<h3 class="text-label-md font-bold text-on-surface-variant">待审批 Pending</h3>
+<p class="text-display-lg text-display-lg font-bold">12</p>
+</div>
+</div>
+<div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+<div class="flex items-center justify-between mb-md">
+<span class="p-2 bg-primary-container/10 text-primary rounded-lg">
+<span class="material-symbols-outlined">check_circle</span>
+</span>
+<span class="text-label-sm text-on-surface-variant font-label-sm">84% success rate</span>
+</div>
+<div>
+<h3 class="text-label-md font-bold text-on-surface-variant">已通过 Approved</h3>
+<p class="text-display-lg text-display-lg font-bold">48</p>
+</div>
+</div>
+<div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+<div class="flex items-center justify-between mb-md">
+<span class="p-2 bg-error-container/10 text-error rounded-lg">
+<span class="material-symbols-outlined">cancel</span>
+</span>
+<span class="text-label-sm text-error font-label-sm">Requires Attention</span>
+</div>
+<div>
+<h3 class="text-label-md font-bold text-on-surface-variant">被驳回 Rejected</h3>
+<p class="text-display-lg text-display-lg font-bold">3</p>
+</div>
+</div>
+<div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+<div class="flex items-center justify-between mb-md">
+<span class="p-2 bg-surface-container-high text-on-surface-variant rounded-lg">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</span>
+<span class="text-label-sm text-on-surface-variant font-label-sm">Total Value</span>
+</div>
+<div>
+<h3 class="text-label-md font-bold text-on-surface-variant">本月报销总额 Total Amount</h3>
+<p class="text-display-lg text-display-lg font-bold">¥12,450.00</p>
+</div>
+</div>
+</div>
+<!-- Data Table Container -->
+<div class="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">报销单号 Reimbursement No</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">日期 Date</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">费用类型 Expense Type</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">金额 Amount</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">状态 Status</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider"></th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<!-- Table Row 1 -->
+<tr class="row-hover cursor-pointer transition-colors" onclick="toggleDrawer('RB20260016')">
+<td class="px-lg py-md">
+<p class="text-body-md font-bold text-primary">RB20260016</p>
+<p class="text-label-sm text-on-surface-variant">Q1 Business Travel</p>
+</td>
+<td class="px-lg py-md text-body-md">2026-03-24</td>
+<td class="px-lg py-md text-body-md">差旅费 Travel</td>
+<td class="px-lg py-md text-body-md font-bold">¥ 4,500.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-1 bg-secondary-container/10 text-secondary rounded-full text-label-sm font-bold flex items-center gap-1 w-fit">
+<span class="w-1.5 h-1.5 bg-secondary rounded-full"></span> Pending
+                                </span>
+</td>
+<td class="px-lg py-md text-right">
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</td>
+</tr>
+<!-- Table Row 2 -->
+<tr class="row-hover cursor-pointer transition-colors" onclick="toggleDrawer('RB20260015')">
+<td class="px-lg py-md">
+<p class="text-body-md font-bold text-primary">RB20260015</p>
+<p class="text-label-sm text-on-surface-variant">Team Lunch</p>
+</td>
+<td class="px-lg py-md text-body-md">2026-03-22</td>
+<td class="px-lg py-md text-body-md">餐饮费 Dining</td>
+<td class="px-lg py-md text-body-md font-bold">¥ 820.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-1 bg-primary-container/10 text-primary rounded-full text-label-sm font-bold flex items-center gap-1 w-fit">
+<span class="w-1.5 h-1.5 bg-primary rounded-full"></span> Approved
+                                </span>
+</td>
+<td class="px-lg py-md text-right">
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</td>
+</tr>
+<!-- Table Row 3 -->
+<tr class="row-hover cursor-pointer transition-colors" onclick="toggleDrawer('RB20260014')">
+<td class="px-lg py-md">
+<p class="text-body-md font-bold text-primary">RB20260014</p>
+<p class="text-label-sm text-on-surface-variant">AWS Cloud Subscription</p>
+</td>
+<td class="px-lg py-md text-body-md">2026-03-20</td>
+<td class="px-lg py-md text-body-md">办公费 Office</td>
+<td class="px-lg py-md text-body-md font-bold">¥ 2,100.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-1 bg-error-container/10 text-error rounded-full text-label-sm font-bold flex items-center gap-1 w-fit">
+<span class="w-1.5 h-1.5 bg-error rounded-full"></span> Rejected
+                                </span>
+</td>
+<td class="px-lg py-md text-right">
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</td>
+</tr>
+<!-- Table Row 4 -->
+<tr class="row-hover cursor-pointer transition-colors" onclick="toggleDrawer('RB20260013')">
+<td class="px-lg py-md">
+<p class="text-body-md font-bold text-primary">RB20260013</p>
+<p class="text-label-sm text-on-surface-variant">Project A Assets</p>
+</td>
+<td class="px-lg py-md text-body-md">2026-03-18</td>
+<td class="px-lg py-md text-body-md">其他 Misc</td>
+<td class="px-lg py-md text-body-md font-bold">¥ 1,500.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-1 bg-surface-container-high text-on-surface-variant rounded-full text-label-sm font-bold flex items-center gap-1 w-fit">
+<span class="w-1.5 h-1.5 bg-outline rounded-full"></span> Draft
+                                </span>
+</td>
+<td class="px-lg py-md text-right">
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</td>
+</tr>
+<!-- Table Row 5 (Split Case) -->
+<tr class="row-hover cursor-pointer transition-colors" onclick="toggleDrawer('RB20260012')">
+<td class="px-lg py-md">
+<p class="text-body-md font-bold text-primary">RB20260012</p>
+<p class="text-label-sm text-on-surface-variant">Marketing Event</p>
+</td>
+<td class="px-lg py-md text-body-md">2026-03-15</td>
+<td class="px-lg py-md text-body-md">市场费 Marketing</td>
+<td class="px-lg py-md text-body-md font-bold">¥ 3,000.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-1 bg-tertiary-container/10 text-tertiary-fixed-dim rounded-full text-label-sm font-bold flex items-center gap-1 w-fit">
+<span class="w-1.5 h-1.5 bg-tertiary rounded-full"></span> Split
+                                </span>
+</td>
+<td class="px-lg py-md text-right">
+<span class="material-symbols-outlined text-outline">chevron_right</span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Pagination -->
+<div class="px-lg py-md border-t border-outline-variant flex items-center justify-between">
+<span class="text-label-sm text-on-surface-variant font-label-sm">Showing 1 to 5 of 65 entries</span>
+<div class="flex gap-xs">
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-label-md">chevron_left</span></button>
+<button class="px-3 py-1 bg-primary text-on-primary rounded text-label-md font-bold">1</button>
+<button class="px-3 py-1 border border-outline-variant rounded text-label-md hover:bg-surface-container transition-colors">2</button>
+<button class="px-3 py-1 border border-outline-variant rounded text-label-md hover:bg-surface-container transition-colors">3</button>
+<button class="p-2 border border-outline-variant rounded hover:bg-surface-container transition-colors"><span class="material-symbols-outlined text-label-md">chevron_right</span></button>
+</div>
+</div>
+</div>
+</main>
+<!-- Detail Drawer Overlay -->
+<div class="fixed inset-0 bg-on-background/20 backdrop-blur-sm z-[60] hidden opacity-0 transition-opacity duration-300" id="drawer-overlay" onclick="closeDrawer()"></div>
+<!-- Detail Drawer Content -->
+<div class="detail-drawer fixed right-0 top-0 h-screen w-[500px] bg-white z-[70] shadow-2xl flex flex-col" id="detail-drawer">
+<div class="px-xl py-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface" id="drawer-title">RB20260016</h3>
+<p class="text-label-md text-on-surface-variant">Reimbursement Detail / 详情</p>
+</div>
+<button class="p-2 hover:bg-error-container/10 hover:text-error rounded-full transition-colors" onclick="closeDrawer()">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto p-xl space-y-xl">
+<!-- Linked Invoices Section -->
+<section>
+<div class="flex items-center justify-between mb-md">
+<h4 class="font-headline-sm text-headline-sm text-on-surface">关联发票 Linked Invoices</h4>
+<span class="text-label-sm text-primary font-bold cursor-pointer hover:underline">View All (3)</span>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div class="border border-outline-variant rounded-xl p-md group cursor-pointer hover:border-primary transition-all">
+<div class="bg-surface-container-high aspect-[3/4] rounded-lg mb-sm flex items-center justify-center relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform" data-alt="A clean, high-resolution scan of a corporate tax invoice with clear blue letterhead, precise typography, and official red digital stamps. The image is brightly lit, emphasizing professional document management in a corporate setting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAeVd7-ePnpWn9BzRubpBxWWFNilPqKABhLFrLbZpFpjv6JJEtW_j4y70IObMJBQ4cnMAuFelf25NyPJpZDGlSHHoPhtOTFGmLTL3bcnK_JKSb_zPOCfhsyc4ht8G4YmKRmgFbAXhEc8ceI7t2IL48GqODPabyn5uojnuXAsm1VxzJrSskg1jU3jk_Bn_Y6Db_G9tRLhZ4UcGU5clxeHwq1ZbhZ_EuKKX4DvTnDccRWvYKdFl6aLBQpYqDeWfdSDZvdZLhzXjIRdEQ')"></div>
+<span class="material-symbols-outlined text-primary text-4xl opacity-0 group-hover:opacity-100 transition-opacity relative z-10">zoom_in</span>
+</div>
+<p class="text-label-sm font-bold truncate">Taxi_Receipt_024.pdf</p>
+<p class="text-label-sm text-on-surface-variant">¥ 45.00</p>
+</div>
+<div class="border border-outline-variant rounded-xl p-md group cursor-pointer hover:border-primary transition-all">
+<div class="bg-surface-container-high aspect-[3/4] rounded-lg mb-sm flex items-center justify-center relative overflow-hidden">
+<div class="absolute inset-0 bg-cover bg-center group-hover:scale-105 transition-transform" data-alt="A macro photograph of an airline boarding pass with official logos and QR codes, partially resting on a sleek mahogany desk next to a high-end fountain pen. The lighting is soft and professional, evoking a business travel theme." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAjQorHMxxqZU8x4ne15PsI5hk6kV-H0nsXt0zt2pgZ4dCS0mMDh2dDBZKstwI9Lv4pNWc4JXbrkBt634yaGZJoxmbw0BKR97AtXOmdyheXlMpQtQ9z4f37ETJWEFavWeGcmSSDvVj7qNXVwq3OER-I2ouZ-onTaVZioKXK_d8HPFvGk5pg_YKHm7kBs7Vb-ebawA77ffv2Zol3jey4hHeVXZJm4d_GgmfQBkU28V4kStetnkk07mA8SujLf_12grA554S0S_prSiU')"></div>
+<span class="material-symbols-outlined text-primary text-4xl opacity-0 group-hover:opacity-100 transition-opacity relative z-10">zoom_in</span>
+</div>
+<p class="text-label-sm font-bold truncate">Airfare_Booking.pdf</p>
+<p class="text-label-sm text-on-surface-variant">¥ 3,240.00</p>
+</div>
+</div>
+</section>
+<!-- Approval Chain Section -->
+<section>
+<h4 class="font-headline-sm text-headline-sm text-on-surface mb-md">审批链 Approval Chain</h4>
+<div class="space-y-0 relative">
+<!-- Progress Line -->
+<div class="absolute left-4 top-4 bottom-4 w-px bg-outline-variant"></div>
+<!-- Item 1: Submission -->
+<div class="relative pl-10 pb-xl">
+<span class="absolute left-2.5 top-1 w-3 h-3 rounded-full bg-primary ring-4 ring-primary/10"></span>
+<div class="bg-white border border-outline-variant p-md rounded-xl">
+<div class="flex justify-between items-start mb-1">
+<p class="text-body-md font-bold">提交报销 Submitted</p>
+<span class="text-label-sm text-on-surface-variant">2026-03-24 10:20</span>
+</div>
+<p class="text-body-md text-on-surface-variant">Chen Wei (Marketing)</p>
+</div>
+</div>
+<!-- Item 2: Manager Review -->
+<div class="relative pl-10 pb-xl">
+<span class="absolute left-2.5 top-1 w-3 h-3 rounded-full bg-secondary ring-4 ring-secondary/10"></span>
+<div class="bg-white border border-outline-variant p-md rounded-xl">
+<div class="flex justify-between items-start mb-1">
+<p class="text-body-md font-bold">部门经理审核 Manager Review</p>
+<span class="text-label-sm text-secondary font-bold">In Progress</span>
+</div>
+<div class="flex items-center gap-sm">
+<img class="w-6 h-6 rounded-full" data-alt="A close-up portrait of a senior business manager in a corporate office, characterized by a friendly yet professional expression. The background features a blurred modern architectural office space with glass partitions and soft daylight." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHLTSWD0Uy-JIA_up29zSiVdWsMCZOpM9Xyn0fr6owCgbvQBePym0ryA6eD7MmH1x1yJ-ecAj84nupapWJq6ZbX3Rbyp3x_GfMlTQCVUYqSTfSBK6oB9XlP_Jk1ukp6d6eaJWB3Mxgb47OvJN9zL-S0IUg3sbLzvdR7sGgZjnOpW5H34g_7OM68Bp6p8G6tRjvEm8CABvqU9ykhRcQ9aSPpqRL2OMhBvseDH6ocWLdVCCRUNFmZ4QsPMPNYqJZ0tOCajl8HL0rbRM"/>
+<p class="text-body-md text-on-surface-variant">Zhang Min (Dept. Lead)</p>
+</div>
+</div>
+</div>
+<!-- Item 3: Finance Audit -->
+<div class="relative pl-10">
+<span class="absolute left-2.5 top-1 w-3 h-3 rounded-full bg-outline-variant"></span>
+<div class="bg-surface-container-low border border-dashed border-outline-variant p-md rounded-xl">
+<div class="flex justify-between items-start mb-1">
+<p class="text-body-md font-bold text-on-surface-variant">财务终审 Finance Audit</p>
+<span class="text-label-sm text-outline">Pending</span>
+</div>
+<p class="text-body-md text-outline">System Assigned to Finance-04</p>
+</div>
+</div>
+</div>
+</section>
+<!-- Audit Trail Chat Bubbles -->
+<section>
+<h4 class="font-headline-sm text-headline-sm text-on-surface mb-md">意见反馈 Feedback</h4>
+<div class="space-y-md">
+<div class="flex justify-start">
+<div class="bg-surface-container-high p-md rounded-2xl rounded-tl-none max-w-[80%]">
+<p class="text-body-md">请核对Airfare附件中的行程单是否有误，目前显示的PDF模糊。Please check the airfare PDF, it seems a bit blurry.</p>
+<p class="text-label-sm text-on-surface-variant mt-1">Zhang Min · 14:05</p>
+</div>
+</div>
+<div class="flex justify-end">
+<div class="bg-white border border-outline-variant p-md rounded-2xl rounded-tr-none max-w-[80%] text-right shadow-sm">
+<p class="text-body-md text-on-background">已重新上传高清版本，请查阅。Uploaded high-res version, please check.</p>
+<p class="text-label-sm text-on-surface-variant mt-1">Me · 14:12</p>
+</div>
+</div>
+</div>
+<div class="mt-lg flex items-center gap-sm">
+<input class="flex-1 px-md py-2 bg-surface-container-low border border-outline-variant rounded-full text-body-md focus:border-primary outline-none" placeholder="Type a message..." type="text"/>
+<button class="bg-primary text-on-primary p-2 rounded-full hover:shadow-lg transition-shadow active:scale-95">
+<span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</section>
+</div>
+<div class="px-xl py-lg border-t border-outline-variant flex gap-md">
+<button class="flex-1 py-md border border-outline-variant text-primary font-bold rounded-lg hover:bg-surface-container transition-colors">Edit Report</button>
+<button class="flex-1 py-md bg-error text-on-error font-bold rounded-lg hover:bg-error/90 transition-colors">Recall 撤回</button>
+</div>
+</div>
+<script>
+        function toggleDrawer(id) {
+            const drawer = document.getElementById('detail-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            const title = document.getElementById('drawer-title');
+            
+            title.textContent = id;
+            drawer.classList.add('open');
+            overlay.classList.remove('hidden');
+            setTimeout(() => overlay.classList.add('opacity-100'), 10);
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeDrawer() {
+            const drawer = document.getElementById('detail-drawer');
+            const overlay = document.getElementById('drawer-overlay');
+            
+            drawer.classList.remove('open');
+            overlay.classList.remove('opacity-100');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                document.body.style.overflow = '';
+            }, 300);
+        }
+
+        // Add some interaction for table rows
+        document.querySelectorAll('.row-hover').forEach(row => {
+            row.addEventListener('click', () => {
+                // The toggleDrawer is already attached via onclick in HTML
+            });
+        });
+    </script>
+</body></html>

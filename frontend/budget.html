@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Budget Overview - FinFlow Corp</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed": "#191c1e",
+                    "on-background": "#0d1c2e",
+                    "secondary-fixed": "#d4e3ff",
+                    "tertiary-container": "#484c4e",
+                    "on-error-container": "#93000a",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#c4c5d5",
+                    "on-error": "#ffffff",
+                    "on-secondary-container": "#003c70",
+                    "inverse-primary": "#b8c4ff",
+                    "surface-container-low": "#eff4ff",
+                    "surface-variant": "#d5e3fc",
+                    "inverse-on-surface": "#eaf1ff",
+                    "secondary-fixed-dim": "#a4c9ff",
+                    "primary-fixed": "#dde1ff",
+                    "primary-fixed-dim": "#b8c4ff",
+                    "on-primary-container": "#a8b8ff",
+                    "secondary-container": "#64a8fe",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "tertiary-fixed": "#e0e3e5",
+                    "on-surface-variant": "#444653",
+                    "error-container": "#ffdad6",
+                    "surface": "#f8f9ff",
+                    "surface-dim": "#ccdbf3",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#b9bcbe",
+                    "on-primary-fixed-variant": "#173bab",
+                    "tertiary": "#323537",
+                    "background": "#f8f9ff",
+                    "on-surface": "#0d1c2e",
+                    "on-secondary-fixed-variant": "#004883",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#233144",
+                    "on-secondary-fixed": "#001c39",
+                    "on-tertiary-fixed-variant": "#444749",
+                    "surface-bright": "#f8f9ff",
+                    "surface-container-highest": "#d5e3fc",
+                    "surface-container-high": "#dce9ff",
+                    "on-primary-fixed": "#001453",
+                    "outline": "#757684",
+                    "primary-container": "#1e40af",
+                    "secondary": "#0060ac",
+                    "surface-tint": "#3755c3",
+                    "on-tertiary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "sm": "8px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "margin-desktop": "32px",
+                    "gutter": "20px",
+                    "sidebar-width": "260px",
+                    "margin-mobile": "16px",
+                    "base": "4px",
+                    "md": "16px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "display-lg-mobile": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "display-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "display-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                    "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #F8FAFC;
+        }
+        .bento-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 20px;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #E2E8F0;
+        }
+        .chart-glow {
+            filter: drop-shadow(0 0 8px rgba(30, 64, 175, 0.2));
+        }
+    </style>
+</head>
+<body class="font-body-md text-on-background">
+<!-- SideNavBar Shell -->
+<aside class="bg-primary dark:bg-primary-container w-[260px] h-full fixed left-0 top-0 border-r border-outline-variant flex flex-col py-lg z-50">
+<!-- Brand Identity -->
+<div class="px-md mb-xl flex items-center gap-sm">
+<div class="w-8 h-8 bg-on-primary rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-primary-container">account_balance_wallet</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary">FinFlow Corp</h1>
+<p class="font-label-sm text-label-sm text-on-primary/60">Enterprise Finance</p>
+</div>
+</div>
+<button class="mx-md mb-xl py-sm bg-on-primary-fixed-variant/20 hover:bg-on-primary-fixed-variant/30 text-on-primary font-label-md text-label-md rounded-xl transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            New Report
+        </button>
+<!-- Navigation Links -->
+<nav class="flex-grow">
+<div class="flex flex-col gap-xs">
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+<span class="font-label-md text-label-md">智能报销 Chat Reimbursement</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span class="font-label-md text-label-md">进度查询 Progress Tracking</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10 cursor-pointer">
+<span class="material-symbols-outlined" data-icon="pie_chart">pie_chart</span>
+<span class="font-label-md text-label-md">预算概览 Budget Overview</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95">
+<span class="material-symbols-outlined" data-icon="rule">rule</span>
+<span class="font-label-md text-label-md">审批中心 Approval Center</span>
+</div>
+</div>
+</nav>
+<!-- Footer Actions -->
+<div class="mt-auto flex flex-col gap-xs border-t border-on-primary/10 pt-md">
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 hover:opacity-100 transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md">Settings</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 hover:opacity-100 transition-all cursor-pointer">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-label-md text-label-md">Logout</span>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-[260px] min-h-screen">
+<!-- TopNavBar Shell -->
+<header class="bg-surface h-16 w-full sticky top-0 z-40 border-b border-outline-variant flex justify-between items-center px-margin-desktop">
+<div class="flex items-center gap-xl">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-surface-container rounded-full border-none focus:ring-2 focus:ring-primary text-body-md w-64" placeholder="Search budget data..." type="text"/>
+</div>
+<div class="text-on-surface-variant font-normal font-body-md hover:text-primary transition-colors cursor-pointer">
+                    English/中文
+                </div>
+</div>
+<div class="flex items-center gap-lg">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-outline cursor-pointer hover:text-primary transition-colors" data-icon="help_outline">help_outline</span>
+</div>
+<div class="h-8 w-px bg-outline-variant mx-sm"></div>
+<div class="flex items-center gap-sm cursor-pointer">
+<img class="w-8 h-8 rounded-full border border-outline-variant" data-alt="Professional corporate headshot of a finance executive, clean studio lighting, neutral background, modern business attire, sharp focus." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLzNd8lIkxzO_8TPFAWeZHdQePrCgd-X--WPtWRbjnov5ohdf6M1MDsoOITCz6JEGzolMu-1FPRgl1Q-09qQoKnnTXxpFOByTf2c7vf1DkVFTYYUjmnvhM9qLtSTX5OSn1hW7E1whVNcvsqUFkW4g4dAeZUIlBSMQG_kRvXXcmTRmjLuWda8-zOpFcLhI571rImJ7B9GxvKPIkdgOt87LaqZPKjM-sUKBqVIiLg0NnE1R7FYg8S8JO8zPRlvp7Bc7vY58lqH9QAUg"/>
+<span class="font-label-md text-label-md font-semibold text-primary">Admin User</span>
+</div>
+</div>
+</header>
+<!-- Dashboard Content -->
+<div class="p-margin-desktop">
+<div class="flex justify-between items-end mb-xl">
+<div>
+<h2 class="font-display-lg text-display-lg text-primary">Department Budget Dashboard</h2>
+<p class="font-headline-sm text-headline-sm text-on-surface-variant">部门预算看板 — FY2024 Global Overview</p>
+</div>
+<div class="flex gap-sm">
+<button class="px-md py-sm rounded-lg border border-outline-variant bg-white text-primary font-label-md flex items-center gap-2 hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[18px]">file_download</span>
+                        Export PDF
+                    </button>
+<button class="px-md py-sm rounded-lg bg-primary text-white font-label-md flex items-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+                        Adjust Allocation
+                    </button>
+</div>
+</div>
+<!-- Bento Grid Metrics -->
+<div class="bento-grid mb-xl">
+<div class="col-span-4 glass-card p-lg rounded-xl flex flex-col gap-md">
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Total Corporate Budget</span>
+<span class="material-symbols-outlined text-primary">payments</span>
+</div>
+<div class="flex flex-col">
+<span class="font-display-lg text-display-lg">$4,250,000</span>
+<div class="flex items-center gap-2 text-green-600 mt-1">
+<span class="material-symbols-outlined text-[16px]">trending_up</span>
+<span class="font-label-sm text-label-sm">+12.5% vs Last Period</span>
+</div>
+</div>
+</div>
+<div class="col-span-4 glass-card p-lg rounded-xl flex flex-col gap-md">
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Active Departments</span>
+<span class="material-symbols-outlined text-secondary">groups</span>
+</div>
+<div class="flex flex-col">
+<span class="font-display-lg text-display-lg">18</span>
+<p class="font-label-sm text-label-sm text-on-surface-variant mt-1">Global HQ &amp; Regional Offices</p>
+</div>
+</div>
+<div class="col-span-4 glass-card p-lg rounded-xl flex flex-col gap-md">
+<div class="flex justify-between items-center">
+<span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Approval Efficiency</span>
+<span class="material-symbols-outlined text-orange-500">speed</span>
+</div>
+<div class="flex flex-col">
+<span class="font-display-lg text-display-lg">1.4 Days</span>
+<div class="flex items-center gap-2 text-green-600 mt-1">
+<span class="material-symbols-outlined text-[16px]">arrow_downward</span>
+<span class="font-label-sm text-label-sm">-20% faster turnaround</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Detailed Department List -->
+<div class="glass-card rounded-xl overflow-hidden">
+<div class="p-lg border-b border-outline-variant flex justify-between items-center bg-white">
+<h3 class="font-headline-md text-headline-md">Budget Utilization by Department <span class="font-normal text-on-surface-variant ml-2">各部门预算执行详情</span></h3>
+<div class="flex gap-md">
+<div class="flex items-center gap-1.5">
+<div class="w-3 h-3 rounded-full bg-green-500"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Healthy (&gt;30%)</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Warning (10-30%)</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-3 h-3 rounded-full bg-red-500"></div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Critical (&lt;10%)</span>
+</div>
+</div>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead class="bg-surface-container-low border-b border-outline-variant">
+<tr>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Dept Name (部门)</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Progress (进度)</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Total Budget (总预算)</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Spent (已支出)</th>
+<th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Remaining (剩余)</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant bg-white">
+<!-- Research & Development -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-lg py-md">
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-primary">R&amp;D Department</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">研发部 - Project Apollo</span>
+</div>
+</td>
+<td class="px-lg py-md w-1/3">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm font-bold text-green-600">65% Available</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">35% Used</span>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-green-500 rounded-full" style="width: 35%"></div>
+</div>
+</div>
+</td>
+<td class="px-lg py-md text-right font-body-md">$1,200,000</td>
+<td class="px-lg py-md text-right font-body-md">$420,000</td>
+<td class="px-lg py-md text-right font-body-md font-bold text-green-600">$780,000</td>
+</tr>
+<!-- Sales & Marketing -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-lg py-md">
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-primary">Marketing &amp; PR</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">市场公关部 - Q3 Campaign</span>
+</div>
+</td>
+<td class="px-lg py-md">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm font-bold text-yellow-600">18% Available</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">82% Used</span>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-yellow-500 rounded-full" style="width: 82%"></div>
+</div>
+</div>
+</td>
+<td class="px-lg py-md text-right font-body-md">$850,000</td>
+<td class="px-lg py-md text-right font-body-md">$697,000</td>
+<td class="px-lg py-md text-right font-body-md font-bold text-yellow-600">$153,000</td>
+</tr>
+<!-- Operations -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-lg py-md">
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-primary">Global Operations</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">运营中心 - Supply Chain</span>
+</div>
+</td>
+<td class="px-lg py-md">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm font-bold text-red-600">4% Available</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">96% Used</span>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-red-500 rounded-full" style="width: 96%"></div>
+</div>
+</div>
+</td>
+<td class="px-lg py-md text-right font-body-md">$2,000,000</td>
+<td class="px-lg py-md text-right font-body-md">$1,920,000</td>
+<td class="px-lg py-md text-right font-body-md font-bold text-red-600">$80,000</td>
+</tr>
+<!-- Human Resources -->
+<tr class="hover:bg-surface-container/30 transition-colors">
+<td class="px-lg py-md">
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-primary">Human Resources</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">人力资源部 - Talent Acq</span>
+</div>
+</td>
+<td class="px-lg py-md">
+<div class="flex flex-col gap-2">
+<div class="flex justify-between items-center">
+<span class="font-label-sm text-label-sm font-bold text-green-600">45% Available</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">55% Used</span>
+</div>
+<div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-green-500 rounded-full" style="width: 55%"></div>
+</div>
+</div>
+</td>
+<td class="px-lg py-md text-right font-body-md">$450,000</td>
+<td class="px-lg py-md text-right font-body-md">$247,500</td>
+<td class="px-lg py-md text-right font-body-md font-bold text-green-600">$202,500</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-md bg-surface-container-low border-t border-outline-variant flex justify-center">
+<button class="text-primary font-label-md flex items-center gap-1 hover:underline">
+                        View All Departments (14 more) 
+                        <span class="material-symbols-outlined text-[18px]">expand_more</span>
+</button>
+</div>
+</div>
+<!-- Visualization Section -->
+<div class="grid grid-cols-2 gap-xl mt-xl">
+<!-- Trend Analysis -->
+<div class="glass-card p-lg rounded-xl">
+<h3 class="font-headline-sm text-headline-sm mb-lg">Monthly Spend Trend <span class="text-on-surface-variant font-normal">月度支出趋势</span></h3>
+<div class="h-64 flex items-end justify-between gap-2 px-4 pb-4 border-b border-l border-outline-variant relative">
+<!-- Simulated Chart -->
+<div class="w-full h-24 bg-primary/20 hover:bg-primary/40 rounded-t-sm transition-all cursor-help" title="Jan: $210k"></div>
+<div class="w-full h-32 bg-primary/20 hover:bg-primary/40 rounded-t-sm transition-all cursor-help" title="Feb: $280k"></div>
+<div class="w-full h-48 bg-primary/20 hover:bg-primary/40 rounded-t-sm transition-all cursor-help" title="Mar: $420k"></div>
+<div class="w-full h-40 bg-primary/20 hover:bg-primary/40 rounded-t-sm transition-all cursor-help" title="Apr: $350k"></div>
+<div class="w-full h-56 bg-primary hover:bg-primary/90 rounded-t-sm transition-all cursor-help" title="May (Current): $510k"></div>
+<div class="w-full h-32 bg-primary/10 border-t border-dashed border-primary rounded-t-sm" title="Projected Jun"></div>
+</div>
+<div class="flex justify-between mt-2 font-label-sm text-on-surface-variant px-4">
+<span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun (Proj)</span>
+</div>
+</div>
+<!-- Expense Distribution -->
+<div class="glass-card p-lg rounded-xl">
+<div class="flex justify-between items-start mb-lg">
+<h3 class="font-headline-sm text-headline-sm">Category Distribution <span class="text-on-surface-variant font-normal">支出类别占比</span></h3>
+<span class="material-symbols-outlined text-outline cursor-pointer">info</span>
+</div>
+<div class="flex items-center gap-xl h-64">
+<!-- Doughnut Chart Mock -->
+<div class="relative w-48 h-48 flex-shrink-0">
+<svg class="w-full h-full -rotate-90" viewbox="0 0 36 36">
+<circle cx="18" cy="18" fill="transparent" r="15.915" stroke="#eff4ff" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.915" stroke="#1e40af" stroke-dasharray="40 60" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.915" stroke="#0060ac" stroke-dasharray="25 75" stroke-dashoffset="-40" stroke-width="4"></circle>
+<circle cx="18" cy="18" fill="transparent" r="15.915" stroke="#64a8fe" stroke-dasharray="35 65" stroke-dashoffset="-65" stroke-width="4"></circle>
+</svg>
+<div class="absolute inset-0 flex flex-col items-center justify-center">
+<span class="font-display-lg text-display-lg-mobile text-primary">$4.2M</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Total</span>
+</div>
+</div>
+<div class="flex flex-col gap-md w-full">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-[#1e40af]"></div>
+<span class="font-body-md">Personnel</span>
+</div>
+<span class="font-label-md font-bold">40%</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-[#0060ac]"></div>
+<span class="font-body-md">Equipment</span>
+</div>
+<span class="font-label-md font-bold">25%</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-[#64a8fe]"></div>
+<span class="font-body-md">Marketing</span>
+</div>
+<span class="font-label-md font-bold">35%</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Float Action for Report (Contextual Suppression Logic Check - Home/Dashboard only) -->
+<div class="fixed bottom-lg right-lg group">
+<div class="flex flex-col items-end gap-sm mb-2 opacity-0 group-hover:opacity-100 transition-opacity translate-y-4 group-hover:translate-y-0 duration-300">
+<button class="bg-white text-primary border border-outline-variant px-md py-sm rounded-full shadow-lg font-label-md hover:bg-surface transition-all whitespace-nowrap">Upload Receipts</button>
+<button class="bg-white text-primary border border-outline-variant px-md py-sm rounded-full shadow-lg font-label-md hover:bg-surface transition-all whitespace-nowrap">Schedule Audit</button>
+</div>
+<button class="w-14 h-14 bg-primary text-on-primary rounded-full shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[32px]">add</span>
+</button>
+</div>
+</main>
+<script>
+        // Simple micro-interaction for rows
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.addEventListener('click', () => {
+                row.classList.add('bg-primary/5');
+                setTimeout(() => row.classList.remove('bg-primary/5'), 200);
+            });
+        });
+    </script>
+</body></html>

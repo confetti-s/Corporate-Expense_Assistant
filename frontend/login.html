@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FinFlow Corp - Login &amp; Registration</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed": "#191c1e",
+                    "on-background": "#0d1c2e",
+                    "secondary-fixed": "#d4e3ff",
+                    "tertiary-container": "#484c4e",
+                    "on-error-container": "#93000a",
+                    "error": "#ba1a1a",
+                    "outline-variant": "#c4c5d5",
+                    "on-error": "#ffffff",
+                    "on-secondary-container": "#003c70",
+                    "inverse-primary": "#b8c4ff",
+                    "surface-container-low": "#eff4ff",
+                    "surface-variant": "#d5e3fc",
+                    "inverse-on-surface": "#eaf1ff",
+                    "secondary-fixed-dim": "#a4c9ff",
+                    "primary-fixed": "#dde1ff",
+                    "primary-fixed-dim": "#b8c4ff",
+                    "on-primary-container": "#a8b8ff",
+                    "secondary-container": "#64a8fe",
+                    "tertiary-fixed-dim": "#c4c7c9",
+                    "tertiary-fixed": "#e0e3e5",
+                    "on-surface-variant": "#444653",
+                    "error-container": "#ffdad6",
+                    "surface": "#f8f9ff",
+                    "surface-container": "#e6eeff",
+                    "primary": "#00288e",
+                    "surface-dim": "#ccdbf3",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#b9bcbe",
+                    "on-primary-fixed-variant": "#173bab",
+                    "tertiary": "#323537",
+                    "background": "#f8f9ff",
+                    "on-surface": "#0d1c2e",
+                    "on-secondary-fixed-variant": "#004883",
+                    "on-secondary": "#ffffff",
+                    "on-primary": "#ffffff",
+                    "inverse-surface": "#233144",
+                    "on-secondary-fixed": "#001c39",
+                    "on-tertiary-fixed-variant": "#444749",
+                    "surface-bright": "#f8f9ff",
+                    "surface-container-highest": "#d5e3fc",
+                    "surface-container-high": "#dce9ff",
+                    "on-primary-fixed": "#001453",
+                    "outline": "#757684",
+                    "primary-container": "#1e40af",
+                    "secondary": "#0060ac",
+                    "surface-tint": "#3755c3",
+                    "on-tertiary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "xl": "32px",
+                    "sm": "8px",
+                    "lg": "24px",
+                    "xs": "4px",
+                    "margin-desktop": "32px",
+                    "gutter": "20px",
+                    "sidebar-width": "260px",
+                    "margin-mobile": "16px",
+                    "base": "4px",
+                    "md": "16px"
+            },
+            "fontFamily": {
+                    "label-md": ["Inter"],
+                    "body-md": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "display-lg-mobile": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "display-lg": ["Inter"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "display-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                    "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .form-transition {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background min-h-screen flex overflow-hidden font-body-md">
+<!-- Split Layout Container -->
+<main class="w-full h-screen flex flex-col md:flex-row">
+<!-- Left Side: Visual/Branding -->
+<section class="hidden md:flex md:w-3/5 relative bg-primary items-center justify-center overflow-hidden">
+
+<div class="absolute inset-0 bg-gradient-to-br from-primary via-primary-container to-secondary opacity-90"></div>
+<div class="relative z-10 p-xl max-w-xl text-on-primary">
+<div class="mb-lg">
+<span class="material-symbols-outlined text-[64px] mb-md" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+<h1 class="font-display-lg text-display-lg mb-sm">FinFlow Corp</h1>
+<p class="font-headline-sm text-headline-sm opacity-90">
+                        智能报销与财务管理平台 <br/>
+<span class="text-label-md font-label-md">Next-gen Enterprise Expense Orchestration</span>
+</p>
+</div>
+<div class="space-y-md border-l-2 border-on-primary/30 pl-lg py-sm">
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined">bolt</span>
+<p class="font-body-md text-body-md">实时审批流程 (Real-time Approval Workflows)</p>
+</div>
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined">analytics</span>
+<p class="font-body-md text-body-md">多维数据洞察 (Multi-dimensional Data Insights)</p>
+</div>
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined">security</span>
+<p class="font-body-md text-body-md">企业级合规性保证 (Enterprise-grade Compliance)</p>
+</div>
+</div>
+</div>
+<!-- Background Image Overlay for Texture -->
+<div class="absolute inset-0 opacity-20 pointer-events-none" data-alt="A high-end corporate office lobby with glass walls and professional lighting, shot in a wide architectural angle. The scene uses a deep navy and white color palette, suggesting stability and corporate excellence. Soft daylight filters through the glass, creating a serene and productive atmosphere typical of an enterprise headquarters." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBb2sRJJRuq5o_Y5Gmx5pkK_X2GxagS3U0rehiqZVUnzMXRmRFvOm5FPpYU8ZUAsN59cjTKthaATXej71ErxRFiNQ4MagTI13BVYzvqiFvS-PMQyxVBSj70jahP-21Wt3fgzW_NvbTtu0o0nMd_Y8M2IrpipxhkjtrFqMfToEXHv3caSwv2suXsOGLPEVEazDid45t16EnviW57ct3ifRQCPUmcSorEwCs5sQrUj7q5dso-W-jXhXEmrizB0EVznlp2Df4DlQEgZvY')"></div>
+</section>
+<!-- Right Side: Interaction Area -->
+<section class="w-full md:w-2/5 h-full flex flex-col items-center justify-center p-md lg:p-xl bg-surface relative z-20">
+<!-- Mobile Logo -->
+<div class="md:hidden flex flex-col items-center mb-xl">
+<h1 class="font-headline-md text-headline-md text-primary font-bold">FinFlow Corp</h1>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Enterprise Finance</span>
+</div>
+<!-- Form Card -->
+<div class="w-full max-w-[440px] bg-surface-container-lowest border border-outline-variant p-lg lg:p-xl rounded-xl shadow-sm overflow-hidden relative">
+<!-- Toggle Headers -->
+<div class="flex border-b border-outline-variant mb-xl">
+<button class="flex-1 pb-md font-headline-sm text-headline-sm border-b-2 border-primary text-primary transition-all duration-300" id="login-tab" onclick="toggleForm('login')">
+                        登录 (Login)
+                    </button>
+<button class="flex-1 pb-md font-headline-sm text-headline-sm border-b-2 border-transparent text-on-surface-variant hover:text-primary transition-all duration-300" id="register-tab" onclick="toggleForm('register')">
+                        注册 (Register)
+                    </button>
+</div>
+<!-- Forms Wrapper -->
+<div class="relative overflow-hidden min-h-[420px]">
+<!-- Login Form -->
+<form class="form-transition transform translate-x-0 opacity-100 flex flex-col gap-lg" id="login-form">
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant block">员工工号 (Employee ID)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant/60">person</span>
+<input class="w-full pl-[48px] pr-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="FF-0000" type="text"/>
+</div>
+</div>
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant block">密码 (Password)</label>
+<div class="relative">
+<span class="material-symbols-outlined absolute left-md top-1/2 -translate-y-1/2 text-on-surface-variant/60">lock</span>
+<input class="w-full pl-[48px] pr-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" placeholder="••••••••" type="password"/>
+</div>
+<div class="flex justify-end">
+<a class="font-label-sm text-label-sm text-primary hover:underline" href="#">忘记密码? (Forgot?)</a>
+</div>
+</div>
+<div class="flex items-center gap-sm">
+<input class="w-4 h-4 rounded text-primary border-outline-variant focus:ring-primary" id="remember" type="checkbox"/>
+<label class="font-body-md text-body-md text-on-surface-variant" for="remember">记住我 (Remember me)</label>
+</div>
+<button class="w-full bg-primary text-on-primary py-md font-headline-sm text-headline-sm rounded-lg hover:bg-primary-container active:scale-[0.98] transition-all shadow-md mt-md" onclick="showToast()" type="button">
+                            立即登录 (Login Now)
+                        </button>
+</form>
+<!-- Register Form (Hidden Initially) -->
+<form class="form-transition absolute top-0 w-full transform translate-x-[110%] opacity-0 flex flex-col gap-md" id="register-form">
+<div class="grid grid-cols-2 gap-md">
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant">用户名 (Username)</label>
+<input class="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none" type="text"/>
+</div>
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant">姓名 (Full Name)</label>
+<input class="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none" type="text"/>
+</div>
+</div>
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant">邮箱 (Email)</label>
+<input class="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none" placeholder="corp@finflow.com" type="email"/>
+</div>
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant">密码 (Password)</label>
+<input class="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none" type="password"/>
+</div>
+<div class="grid grid-cols-2 gap-md">
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant">部门 (Department)</label>
+<select class="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none appearance-none">
+<option>Finance</option>
+<option>IT</option>
+<option>Sales</option>
+<option>HR</option>
+</select>
+</div>
+<div class="space-y-base">
+<label class="font-label-md text-label-md text-on-surface-variant">角色 (Role)</label>
+<select class="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none appearance-none">
+<option>Employee</option>
+<option>Manager</option>
+</select>
+</div>
+</div>
+<button class="w-full bg-secondary text-on-primary py-md font-headline-sm text-headline-sm rounded-lg hover:bg-secondary-container active:scale-[0.98] transition-all shadow-md mt-md" type="button">
+                            创建账户 (Register)
+                        </button>
+</form>
+</div>
+</div>
+<!-- Footer Text -->
+<div class="mt-xl text-center text-on-surface-variant/60 font-label-md text-label-md">
+<p>© 2024 FinFlow Corp. All Rights Reserved.</p>
+<div class="mt-sm space-x-md">
+<a class="hover:text-primary transition-colors" href="#">Privacy Policy</a>
+<a class="hover:text-primary transition-colors" href="#">Terms of Service</a>
+</div>
+</div>
+</section>
+</main>
+<!-- Toast Notification Mockup -->
+<div class="fixed bottom-xl left-1/2 -translate-x-1/2 z-50 transform translate-y-[200%] opacity-0 transition-all duration-500 ease-out" id="login-toast">
+<div class="bg-surface-container-highest border border-outline-variant px-xl py-md rounded-full shadow-xl flex items-center gap-md">
+<div class="w-8 h-8 rounded-full bg-on-secondary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-on-primary text-[18px]" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<div>
+<p class="font-headline-sm text-headline-sm text-on-surface">登录成功 (Login Successful)</p>
+<p class="font-label-md text-label-md text-on-surface-variant">正在进入财务中心...</p>
+</div>
+</div>
+</div>
+<script>
+        function toggleForm(type) {
+            const loginForm = document.getElementById('login-form');
+            const registerForm = document.getElementById('register-form');
+            const loginTab = document.getElementById('login-tab');
+            const registerTab = document.getElementById('register-tab');
+
+            if (type === 'register') {
+                loginForm.classList.replace('translate-x-0', '-translate-x-[110%]');
+                loginForm.classList.replace('opacity-100', 'opacity-0');
+                
+                registerForm.classList.replace('translate-x-[110%]', 'translate-x-0');
+                registerForm.classList.replace('opacity-0', 'opacity-100');
+
+                registerTab.classList.replace('border-transparent', 'border-primary');
+                registerTab.classList.replace('text-on-surface-variant', 'text-primary');
+                
+                loginTab.classList.replace('border-primary', 'border-transparent');
+                loginTab.classList.replace('text-primary', 'text-on-surface-variant');
+            } else {
+                loginForm.classList.replace('-translate-x-[110%]', 'translate-x-0');
+                loginForm.classList.replace('opacity-0', 'opacity-100');
+                
+                registerForm.classList.replace('translate-x-0', 'translate-x-[110%]');
+                registerForm.classList.replace('opacity-100', 'opacity-0');
+
+                loginTab.classList.replace('border-transparent', 'border-primary');
+                loginTab.classList.replace('text-on-surface-variant', 'text-primary');
+                
+                registerTab.classList.replace('border-primary', 'border-transparent');
+                registerTab.classList.replace('text-primary', 'text-on-surface-variant');
+            }
+        }
+
+        function showToast() {
+            const toast = document.getElementById('login-toast');
+            toast.classList.replace('translate-y-[200%]', 'translate-y-0');
+            toast.classList.replace('opacity-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.replace('translate-y-0', 'translate-y-[200%]');
+                toast.classList.replace('opacity-100', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body></html>

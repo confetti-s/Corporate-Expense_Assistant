@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% set active_page = 'progress' %}
+{% block title %}FinFlow - Progress Tracking{% endblock %}
+
+{% block content %}
+<div class="p-xl">
+    <!-- Page Header & Filters -->
+    <div class="mb-xl flex items-end justify-between">
+        <div>
+            <h2 class="font-display-lg text-display-lg text-on-surface mb-xs">报销进度查询</h2>
+            <p class="text-body-lg text-on-surface-variant font-body-lg">Progress Tracking &amp; History</p>
+        </div>
+        <div class="flex gap-md">
+            <div class="space-y-xs">
+                <label class="font-label-md text-label-md text-on-surface-variant block">日期范围 Date Range</label>
+                <div class="flex items-center gap-sm px-md py-2 bg-white border border-outline-variant rounded-lg">
+                    <span class="material-symbols-outlined text-outline">calendar_today</span>
+                    <input type="date" id="filter-start-date" class="text-body-md border-none outline-none bg-transparent" onchange="loadReimbursements()"/>
+                    <span class="text-outline">~</span>
+                    <input type="date" id="filter-end-date" class="text-body-md border-none outline-none bg-transparent" onchange="loadReimbursements()"/>
+                </div>
+            </div>
+            <div class="space-y-xs">
+                <label class="font-label-md text-label-md text-on-surface-variant block">Status Filter</label>
+                <select id="filter-status" class="flex items-center gap-sm px-md py-2 bg-white border border-outline-variant rounded-lg text-body-md cursor-pointer" onchange="loadReimbursements()">
+                    <option value="all">All Statuses</option>
+                    <option value="draft">草稿</option>
+                    <option value="pending">待审批</option>
+                    <option value="reviewing">审批中</option>
+                    <option value="approved">已通过</option>
+                    <option value="rejected">已驳回</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-4 gap-lg mb-xl" id="stats-cards">
+        <div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-md">
+                <span class="p-2 bg-secondary-container/10 text-secondary rounded-lg"><span class="material-symbols-outlined">pending_actions</span></span>
+            </div>
+            <div>
+                <h3 class="text-label-md font-bold text-on-surface-variant">待审批 Pending</h3>
+                <p class="text-display-lg text-display-lg font-bold" id="stat-pending">--</p>
+            </div>
+        </div>
+        <div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-md">
+                <span class="p-2 bg-primary-container/10 text-primary rounded-lg"><span class="material-symbols-outlined">check_circle</span></span>
+            </div>
+            <div>
+                <h3 class="text-label-md font-bold text-on-surface-variant">已通过 Approved</h3>
+                <p class="text-display-lg text-display-lg font-bold" id="stat-approved">--</p>
+            </div>
+        </div>
+        <div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-md">
+                <span class="p-2 bg-error-container/10 text-error rounded-lg"><span class="material-symbols-outlined">cancel</span></span>
+            </div>
+            <div>
+                <h3 class="text-label-md font-bold text-on-surface-variant">被驳回 Rejected</h3>
+                <p class="text-display-lg text-display-lg font-bold" id="stat-rejected">--</p>
+            </div>
+        </div>
+        <div class="bg-white border border-outline-variant p-lg rounded-xl flex flex-col justify-between">
+            <div class="flex items-center justify-between mb-md">
+                <span class="p-2 bg-surface-container-high text-on-surface-variant rounded-lg"><span class="material-symbols-outlined">account_balance_wallet</span></span>
+            </div>
+            <div>
+                <h3 class="text-label-md font-bold text-on-surface-variant">本月报销总额 Total Amount</h3>
+                <p class="text-display-lg text-display-lg font-bold" id="stat-month-amount">--</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table -->
+    <div class="bg-white border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-surface-container-low border-b border-outline-variant">
+                        <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">报销单号 Reimbursement No</th>
+                        <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">日期 Date</th>
+                        <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">费用类型 Expense Type</th>
+                        <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">金额 Amount</th>
+                        <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">状态 Status</th>
+                        <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase tracking-wider"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-outline-variant" id="reimbursement-table-body">
+                    <tr><td colspan="6" class="text-center py-xl text-on-surface-variant">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <!-- Pagination -->
+        <div class="px-lg py-md border-t border-outline-variant flex items-center justify-between">
+            <span class="text-label-sm text-on-surface-variant font-label-sm" id="pagination-info">--</span>
+            <div class="flex gap-xs" id="pagination-buttons"></div>
+        </div>
+    </div>
+</main>
+
+<!-- Detail Drawer -->
+<div class="fixed inset-0 bg-on-background/20 backdrop-blur-sm z-[60] hidden opacity-0 transition-opacity duration-300" id="drawer-overlay" onclick="closeDrawer()"></div>
+<div class="detail-drawer fixed right-0 top-0 h-screen w-[500px] bg-white z-[70] shadow-2xl flex flex-col" id="detail-drawer">
+    <div class="px-xl py-lg border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+        <div>
+            <h3 class="font-headline-md text-headline-md text-on-surface" id="drawer-title">--</h3>
+            <p class="text-label-md text-on-surface-variant">Reimbursement Detail</p>
+        </div>
+        <button class="p-2 hover:bg-error-container/10 hover:text-error rounded-full transition-colors" onclick="closeDrawer()">
+            <span class="material-symbols-outlined">close</span>
+        </button>
+    </div>
+    <div class="flex-1 overflow-y-auto p-xl space-y-xl" id="drawer-content">
+        <p class="text-on-surface-variant">Loading...</p>
+    </div>
+</div>
+
+<script>
+let currentPage = 1;
+
+async function loadReimbursements(page = 1) {
+    currentPage = page;
+    const params = { page, page_size: 20 };
+    const status = document.getElementById('filter-status').value;
+    const startDate = document.getElementById('filter-start-date').value;
+    const endDate = document.getElementById('filter-end-date').value;
+    if (status && status !== 'all') params.status = status;
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+
+    try {
+        const data = await getReimbursementList(params);
+        renderTable(data);
+        document.getElementById('pagination-info').textContent =
+            `Showing ${(data.page-1)*data.page_size + 1} to ${Math.min(data.page*data.page_size, data.total)} of ${data.total} entries`;
+    } catch (err) {
+        document.getElementById('reimbursement-table-body').innerHTML =
+            '<tr><td colspan="6" class="text-center py-xl text-error">加载失败</td></tr>';
+    }
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById('reimbursement-table-body');
+    tbody.innerHTML = '';
+    if (data.items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-xl text-on-surface-variant">暂无记录</td></tr>';
+        return;
+    }
+    data.items.forEach(item => {
+        const row = document.createElement('tr');
+        row.className = 'row-hover cursor-pointer transition-colors';
+        row.onclick = () => openDrawer(item.reimbursement_no);
+        row.innerHTML = `
+            <td class="px-lg py-md">
+                <p class="text-body-md font-bold text-primary">${item.reimbursement_no}</p>
+                <p class="text-label-sm text-on-surface-variant">${item.employee_name}</p>
+            </td>
+            <td class="px-lg py-md text-body-md">${item.created_at?.split(' ')[0] || ''}</td>
+            <td class="px-lg py-md text-body-md">${item.expense_type}</td>
+            <td class="px-lg py-md text-body-md font-bold">${formatMoney(item.total_amount)}</td>
+            <td class="px-lg py-md">
+                <span class="px-sm py-1 rounded-full text-label-sm font-bold flex items-center gap-1 w-fit ${getStatusClass(item.status)}">
+                    <span class="w-1.5 h-1.5 ${getStatusDot(item.status)} rounded-full"></span> ${item.status_label}
+                </span>
+            </td>
+            <td class="px-lg py-md text-right"><span class="material-symbols-outlined text-outline">chevron_right</span></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+async function openDrawer(reimbursementNo) {
+    const drawer = document.getElementById('detail-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    document.getElementById('drawer-title').textContent = reimbursementNo;
+
+    drawer.classList.add('open');
+    overlay.classList.remove('hidden');
+    setTimeout(() => overlay.classList.add('opacity-100'), 10);
+    document.body.style.overflow = 'hidden';
+
+    try {
+        const detail = await getReimbursementDetail(reimbursementNo);
+        renderDrawerContent(detail);
+    } catch (err) {
+        document.getElementById('drawer-content').innerHTML = '<p class="text-error">加载详情失败</p>';
+    }
+}
+
+function renderDrawerContent(detail) {
+    if (detail.error) {
+        document.getElementById('drawer-content').innerHTML = `<p class="text-error">${detail.error}</p>`;
+        return;
+    }
+
+    let invHtml = '';
+    (detail.invoices || []).forEach(inv => {
+        invHtml += `<div class="border border-outline-variant rounded-xl p-md">
+            <p class="text-label-sm font-bold">${inv.invoice_type_name || '发票'} - ${formatMoney(inv.amount)}</p>
+            <p class="text-label-sm text-on-surface-variant">日期: ${inv.invoice_date || '-'} | ${inv.is_valid ? '✅ 合规' : '❌ ' + (inv.invalid_reason || '不合规')}</p>
+        </div>`;
+    });
+
+    let approvalHtml = '';
+    (detail.approval_records || []).forEach(rec => {
+        approvalHtml += `<div class="relative pl-10 pb-xl">
+            <span class="absolute left-2.5 top-1 w-3 h-3 rounded-full ${rec.status === 'approved' ? 'bg-primary' : rec.status === 'rejected' ? 'bg-error' : 'bg-outline-variant'} ring-4 ring-primary/10"></span>
+            <div class="bg-white border border-outline-variant p-md rounded-xl">
+                <div class="flex justify-between items-start mb-1">
+                    <p class="text-body-md font-bold">L${rec.approval_level} 审批 - ${rec.approver_name}</p>
+                    <span class="text-label-sm ${rec.status === 'approved' ? 'text-green-600' : rec.status === 'rejected' ? 'text-red-600' : 'text-outline'}">${rec.status}</span>
+                </div>
+                <p class="text-body-md text-on-surface-variant">${rec.comment || ''}</p>
+                <p class="text-label-sm text-outline">${rec.approved_at || '待处理'}</p>
+            </div>
+        </div>`;
+    });
+
+    document.getElementById('drawer-content').innerHTML = `
+        <section>
+            <h4 class="font-headline-sm text-headline-sm text-on-surface mb-md">基本信息</h4>
+            <div class="space-y-sm text-body-md">
+                <p><strong>申请人:</strong> ${detail.employee_name} (${detail.employee_id})</p>
+                <p><strong>部门:</strong> ${detail.department_name}</p>
+                <p><strong>费用类型:</strong> ${detail.expense_type}</p>
+                <p><strong>金额:</strong> ${formatMoney(detail.total_amount)}</p>
+                <p><strong>状态:</strong> ${detail.status_label}</p>
+                <p><strong>提交时间:</strong> ${detail.created_at}</p>
+                ${detail.ai_suggestion ? `<div class="bg-surface-container-low p-md rounded-lg mt-md"><p class="text-label-sm font-bold">AI建议:</p><p class="text-body-md">${escapeHtml(detail.ai_suggestion)}</p></div>` : ''}
+            </div>
+        </section>
+        <section>
+            <h4 class="font-headline-sm text-headline-sm text-on-surface mb-md">关联发票 (${(detail.invoices||[]).length})</h4>
+            <div class="space-y-md">${invHtml || '<p class="text-on-surface-variant">暂无发票</p>'}</div>
+        </section>
+        <section>
+            <h4 class="font-headline-sm text-headline-sm text-on-surface mb-md">审批链</h4>
+            <div class="space-y-0 relative">
+                <div class="absolute left-4 top-4 bottom-4 w-px bg-outline-variant"></div>
+                ${approvalHtml || '<p class="text-on-surface-variant pl-10">暂无审批记录</p>'}
+            </div>
+        </section>`;
+}
+
+function closeDrawer() {
+    const drawer = document.getElementById('detail-drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    drawer.classList.remove('open');
+    overlay.classList.remove('opacity-100');
+    setTimeout(() => { overlay.classList.add('hidden'); document.body.style.overflow = ''; }, 300);
+}
+
+async function loadStats() {
+    try {
+        const stats = await getProgressStats();
+        document.getElementById('stat-pending').textContent = stats.pending_count;
+        document.getElementById('stat-approved').textContent = stats.approved_count;
+        document.getElementById('stat-rejected').textContent = stats.rejected_count;
+        document.getElementById('stat-month-amount').textContent = formatMoney(stats.month_total_amount);
+    } catch (err) { /* ignore */ }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadStats();
+    loadReimbursements();
+});
+</script>
+{% endblock %}

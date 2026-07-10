@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FinFlow - Approval Center / 审批中心</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                "on-tertiary-fixed": "#191c1e",
+                "on-background": "#0d1c2e",
+                "secondary-fixed": "#d4e3ff",
+                "tertiary-container": "#484c4e",
+                "on-error-container": "#93000a",
+                "error": "#ba1a1a",
+                "outline-variant": "#c4c5d5",
+                "on-error": "#ffffff",
+                "on-secondary-container": "#003c70",
+                "inverse-primary": "#b8c4ff",
+                "surface-container-low": "#eff4ff",
+                "surface-variant": "#d5e3fc",
+                "inverse-on-surface": "#eaf1ff",
+                "secondary-fixed-dim": "#a4c9ff",
+                "primary-fixed": "#dde1ff",
+                "primary-fixed-dim": "#b8c4ff",
+                "on-primary-container": "#a8b8ff",
+                "secondary-container": "#64a8fe",
+                "tertiary-fixed-dim": "#c4c7c9",
+                "tertiary-fixed": "#e0e3e5",
+                "on-surface-variant": "#444653",
+                "error-container": "#ffdad6",
+                "surface": "#f8f9ff",
+                "surface-container": "#e6eeff",
+                "primary": "#00288e",
+                "surface-dim": "#ccdbf3",
+                "surface-container-lowest": "#ffffff",
+                "on-tertiary-container": "#b9bcbe",
+                "on-primary-fixed-variant": "#173bab",
+                "tertiary": "#323537",
+                "background": "#f8f9ff",
+                "on-surface": "#0d1c2e",
+                "on-secondary-fixed-variant": "#004883",
+                "on-secondary": "#ffffff",
+                "on-primary": "#ffffff",
+                "inverse-surface": "#233144",
+                "on-secondary-fixed": "#001c39",
+                "on-tertiary-fixed-variant": "#444749",
+                "surface-bright": "#f8f9ff",
+                "surface-container-highest": "#d5e3fc",
+                "surface-container-high": "#dce9ff",
+                "on-primary-fixed": "#001453",
+                "outline": "#757684",
+                "primary-container": "#1e40af",
+                "secondary": "#0060ac",
+                "surface-tint": "#3755c3",
+                "on-tertiary": "#ffffff"
+            },
+            "borderRadius": {
+                "DEFAULT": "0.125rem",
+                "lg": "0.25rem",
+                "xl": "0.5rem",
+                "full": "0.75rem"
+            },
+            "spacing": {
+                "xl": "32px",
+                "sm": "8px",
+                "lg": "24px",
+                "xs": "4px",
+                "margin-desktop": "32px",
+                "gutter": "20px",
+                "sidebar-width": "260px",
+                "margin-mobile": "16px",
+                "base": "4px",
+                "md": "16px"
+            },
+            "fontFamily": {
+                "label-md": ["Inter"],
+                "body-md": ["Inter"],
+                "body-lg": ["Inter"],
+                "headline-sm": ["Inter"],
+                "headline-md": ["Inter"],
+                "label-sm": ["Inter"],
+                "display-lg": ["Inter"]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body {
+            background-color: #F8FAFC;
+            color: #0d1c2e;
+            font-family: 'Inter', sans-serif;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid #E2E8F0;
+        }
+        .sidebar-active-indicator {
+            position: absolute;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background-color: white;
+        }
+    </style>
+</head>
+<body class="font-body-md text-body-md">
+<!-- SideNavBar Shell -->
+<aside class="w-[260px] h-screen fixed left-0 top-0 bg-primary dark:bg-primary-container border-r border-outline-variant flex flex-col py-lg z-50">
+<div class="px-md mb-xl">
+<div class="flex items-center gap-sm">
+<div class="w-10 h-10 bg-on-primary rounded-lg flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-headline-md">account_balance_wallet</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-on-primary">FinFlow Corp</h1>
+<p class="font-label-sm text-label-sm text-on-primary/70">Enterprise Finance</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 space-y-xs">
+<!-- 智能报销 Chat Reimbursement -->
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined" data-icon="chat_bubble">chat_bubble</span>
+<span>智能报销 Chat Reimbursement</span>
+</div>
+<!-- 进度查询 Progress Tracking -->
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span>进度查询 Progress Tracking</span>
+</div>
+<!-- 预算概览 Budget Overview -->
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer active:scale-95 font-label-md text-label-md">
+<span class="material-symbols-outlined" data-icon="pie_chart">pie_chart</span>
+<span>预算概览 Budget Overview</span>
+</div>
+<!-- 审批中心 Approval Center (ACTIVE) -->
+<div class="flex items-center gap-md px-md py-sm text-on-primary opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10 cursor-pointer active:scale-95 font-label-md text-label-md relative">
+<span class="material-symbols-outlined" data-icon="rule" style="font-variation-settings: 'FILL' 1;">rule</span>
+<span>审批中心 Approval Center</span>
+</div>
+</nav>
+<div class="mt-auto px-md">
+<button class="w-full bg-surface-container-lowest text-primary font-bold py-md rounded-xl hover:bg-white transition-colors mb-lg flex items-center justify-center gap-sm">
+<span class="material-symbols-outlined">add</span>
+                New Report
+            </button>
+<div class="space-y-xs">
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 hover:opacity-100 cursor-pointer transition-all font-label-md text-label-md">
+<span class="material-symbols-outlined">settings</span>
+<span>Settings</span>
+</div>
+<div class="flex items-center gap-md px-md py-sm text-on-primary/70 hover:opacity-100 cursor-pointer transition-all font-label-md text-label-md">
+<span class="material-symbols-outlined">logout</span>
+<span>Logout</span>
+</div>
+</div>
+</div>
+</aside>
+<!-- TopNavBar Shell -->
+<header class="h-16 w-full sticky top-0 z-40 bg-surface dark:bg-surface-dim border-b border-outline-variant ml-[260px] flex justify-between items-center px-margin-desktop w-[calc(100%-260px)]">
+<div class="flex items-center gap-xl">
+<div class="relative">
+<span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+<span class="material-symbols-outlined text-outline">search</span>
+</span>
+<input class="block w-64 pl-10 pr-3 py-2 border border-outline-variant rounded-full bg-surface-container-low focus:ring-primary focus:border-primary font-body-md text-body-md" placeholder="Search approvals..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-lg">
+<span class="font-body-md text-on-surface-variant font-normal hover:text-primary transition-colors cursor-pointer">English/中文</span>
+<div class="flex items-center gap-md">
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors" data-icon="notifications">notifications</span>
+<span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors" data-icon="help_outline">help_outline</span>
+</div>
+<div class="h-8 w-8 rounded-full overflow-hidden border border-outline-variant cursor-pointer">
+<img class="w-full h-full object-cover" data-alt="A professional corporate headshot of a middle-aged male manager with a kind smile, wearing a charcoal grey suit and a light blue shirt. The background is a blurred high-end corporate office with soft, warm lighting. The overall aesthetic is clean, professional, and reliable, consistent with a high-density enterprise software environment." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCQjpJ2sF_6EgwhkJC87f8VS344kAMeWN7GxoC0s8ouwlUxGUwT5WW-xntqTW09davXP3heYxoJ5yLHfWOwxBnJNJS-OXzk-HLBPfC7RMEDL6Uy5z2Q8eLR6vFq7MGBguRJBlZ-IKnK_drscKvsWHvOa36QNKcH9dOGLV9Czzx-9cOIDZS-Z_jBxptaqHu8Niklk3bk7uH422xkL7s8rAdQ7ZyGkqtx6xJWaF8ceAW5K8oxrz68UGDVupTrVNKgwL1O0oq_M9ZnnNg"/>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-[260px] p-margin-desktop">
+<div class="max-w-6xl mx-auto space-y-xl">
+<!-- Page Header -->
+<div class="flex justify-between items-end">
+<div>
+<h2 class="font-display-lg text-display-lg text-on-background">待审批列表 <span class="text-on-surface-variant font-normal">Pending Approvals</span></h2>
+<p class="text-on-surface-variant mt-xs">You have 3 expense reports requiring your immediate attention.</p>
+</div>
+<div class="flex gap-md">
+<button class="px-md py-sm rounded-lg border border-outline-variant text-primary font-bold hover:bg-surface-container-low transition-colors">Bulk Approve</button>
+<button class="px-md py-sm rounded-lg bg-primary text-on-primary font-bold shadow-sm hover:opacity-90 transition-opacity">Export Summary</button>
+</div>
+</div>
+<!-- Approval List -->
+<div class="space-y-md">
+<!-- Pending Item 1 -->
+<div class="glass-card rounded-xl overflow-hidden shadow-sm transition-all hover:shadow-md">
+<div class="p-lg">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="Professional portrait of a young female employee in a bright creative studio setting. She is wearing a modern white blouse and has a friendly, professional demeanor. The lighting is bright and airy, reflecting a modern corporate culture focused on efficiency and transparency." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5TzGx3wJsmskTJ89Kgd84f8x5D1gDbwHlyLUllgLGN0_52itu5smBbnAo9DVpe9Aq_QOataUDZyc8qLKC7HwIHWQSw47iU924kz7ggsa6EG-qU3DsBu07hR2HTS2MLnEjGn8n--Ik5-o9DUzkYJriKszAkYGun-uchT6Poy8CARyhpUnBoCWdDHNahl6Z1jnXEC5XqocTfNGfJpKDpUz_Jv_7X2YSszA3KuZpfpK0wbkdbLCF_MHnFg_Qrq1z_OFd4hFBV2gIVpU"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-background">Zhang Wei (张伟)</h3>
+<p class="text-label-sm text-on-surface-variant">Marketing Dept • Submitted 2h ago</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-display-lg text-display-lg-mobile text-primary">¥ 3,420.00</p>
+<span class="px-sm py-1 bg-secondary-container/20 text-secondary font-label-md rounded-full">Business Trip / 出差申请</span>
+</div>
+</div>
+<!-- Bento Details Grid -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md mb-lg">
+<div class="bg-surface-container-low p-md rounded-lg border border-outline-variant/30">
+<p class="text-label-sm text-on-surface-variant uppercase mb-xs">AI Suggestion / AI 建议</p>
+<div class="flex items-center gap-sm text-on-primary-fixed-variant font-bold">
+<span class="material-symbols-outlined text-primary">check_circle</span>
+<span>Compliant / 符合规范</span>
+</div>
+<p class="text-label-sm mt-xs opacity-70">No policy violations detected. Merchant category matches receipt.</p>
+</div>
+<div class="bg-surface-container-low p-md rounded-lg border border-outline-variant/30 col-span-2 flex justify-between items-center">
+<div>
+<p class="text-label-sm text-on-surface-variant uppercase mb-xs">Attachments / 附件</p>
+<div class="flex gap-sm">
+<div class="w-10 h-10 bg-white rounded border border-outline-variant flex items-center justify-center cursor-pointer hover:bg-surface-variant">
+<span class="material-symbols-outlined text-outline">description</span>
+</div>
+<div class="w-10 h-10 bg-white rounded border border-outline-variant flex items-center justify-center cursor-pointer hover:bg-surface-variant">
+<span class="material-symbols-outlined text-outline">image</span>
+</div>
+</div>
+</div>
+<button class="flex items-center gap-xs px-md py-sm rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition-colors">
+<span class="material-symbols-outlined">visibility</span>
+                                    View Invoices / 查看发票
+                                </button>
+</div>
+</div>
+<!-- Action Footer -->
+<div class="pt-md border-t border-outline-variant flex items-center gap-lg">
+<div class="flex-1">
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-md py-sm focus:ring-primary focus:border-primary text-body-md" placeholder="审批意见 / Approval Comment (Optional)..." type="text"/>
+</div>
+<div class="flex gap-md">
+<button class="px-lg py-sm rounded-lg border border-error text-error font-bold hover:bg-error/5 transition-colors">驳回 Reject</button>
+<button class="px-lg py-sm rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-container transition-colors shadow-md">通过 Approve</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Pending Item 2 (AI Warning State) -->
+<div class="glass-card rounded-xl overflow-hidden shadow-sm transition-all border-l-4 border-error">
+<div class="p-lg">
+<div class="flex justify-between items-start mb-md">
+<div class="flex items-center gap-md">
+<div class="w-12 h-12 rounded-full overflow-hidden border border-outline-variant">
+<img class="w-full h-full object-cover" data-alt="Portrait of a senior engineer in his late 40s, calm expression, wearing a navy polo shirt. Minimalist office background with natural light. The aesthetic is steady, experienced, and professional, fitting the high-reliability context of finance software." src="https://lh3.googleusercontent.com/aida-public/AB6AXuA8ax53XlPF7Bx1j0FOKVFSIM3LmZhJAZxg8wqT10Vt9g3csxNFNPoBX2DFirJUu7sE-VzWYzlRrWs8saojOUS-fc_-CdmnNJN_iV741b1vW9qNHKWAf_-Jv_o8-wKjyKz7a6OFsslJxnX_FY4yGIXAyq0JTDV6Q7encKZxhd337DxALrp7iRvqUY-qEN_f-sPwqpceQ0ktVGuYU4waUq4CjYB_m7KgeO56FAnCCv5EklDSIAl7lA__jQkuHniLww6VpdB6d5IHT2w"/>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-background">Li Na (李娜)</h3>
+<p class="text-label-sm text-on-surface-variant">R&amp;D Dept • Submitted 5h ago</p>
+</div>
+</div>
+<div class="text-right">
+<p class="font-display-lg text-display-lg-mobile text-primary">¥ 890.00</p>
+<span class="px-sm py-1 bg-secondary-container/20 text-secondary font-label-md rounded-full">Client Meal / 客户招待</span>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-md mb-lg">
+<div class="bg-error-container/10 p-md rounded-lg border border-error/20">
+<p class="text-label-sm text-error uppercase mb-xs">AI Suggestion / AI 建议</p>
+<div class="flex items-center gap-sm text-error font-bold">
+<span class="material-symbols-outlined">warning</span>
+<span>Duplicate Check / 重复核查</span>
+</div>
+<p class="text-label-sm mt-xs text-error/80">Similar receipt found in last month's report (ID: #EXP-2938). Manual audit suggested.</p>
+</div>
+<div class="bg-surface-container-low p-md rounded-lg border border-outline-variant/30 col-span-2 flex justify-between items-center">
+<div>
+<p class="text-label-sm text-on-surface-variant uppercase mb-xs">Attachments / 附件</p>
+<div class="flex gap-sm">
+<div class="w-10 h-10 bg-white rounded border border-outline-variant flex items-center justify-center cursor-pointer">
+<span class="material-symbols-outlined text-outline">description</span>
+</div>
+</div>
+</div>
+<button class="flex items-center gap-xs px-md py-sm rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition-colors">
+<span class="material-symbols-outlined">visibility</span>
+                                    View Invoices / 查看发票
+                                </button>
+</div>
+</div>
+<div class="pt-md border-t border-outline-variant flex items-center gap-lg">
+<div class="flex-1">
+<input class="w-full bg-surface-container-low border border-outline-variant rounded-lg px-md py-sm focus:ring-primary focus:border-primary text-body-md border-error/50" placeholder="审批意见 / Approval Comment (Mandatory for rejection)..." type="text"/>
+</div>
+<div class="flex gap-md">
+<button class="px-lg py-sm rounded-lg border border-error text-error font-bold hover:bg-error/5 transition-colors">驳回 Reject</button>
+<button class="px-lg py-sm rounded-lg bg-primary text-on-primary font-bold hover:bg-primary-container transition-colors shadow-md">通过 Approve</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Approval History Section -->
+<section class="mt-xl">
+<div class="flex items-center justify-between mb-md">
+<h3 class="font-headline-md text-headline-md text-on-background">审批历史 <span class="text-on-surface-variant font-normal">Approval History</span></h3>
+<button class="text-primary font-bold flex items-center gap-xs">View All History <span class="material-symbols-outlined">arrow_forward</span></button>
+</div>
+<div class="bg-surface rounded-xl border border-outline-variant overflow-hidden">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-low border-b border-outline-variant">
+<th class="px-lg py-md font-label-md text-on-surface-variant">DATE / 时间</th>
+<th class="px-lg py-md font-label-md text-on-surface-variant">APPLICANT / 申请人</th>
+<th class="px-lg py-md font-label-md text-on-surface-variant">TYPE / 类型</th>
+<th class="px-lg py-md font-label-md text-on-surface-variant">AMOUNT / 金额</th>
+<th class="px-lg py-md font-label-md text-on-surface-variant">STATUS / 状态</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-outline-variant">
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-lg py-md text-body-md">2023-11-20 14:30</td>
+<td class="px-lg py-md text-body-md font-bold">Emma Wilson</td>
+<td class="px-lg py-md text-body-md">Office Supplies</td>
+<td class="px-lg py-md text-body-md">¥ 124.50</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-green-100 text-green-700 rounded-full font-label-sm flex items-center w-fit gap-xs">
+<span class="material-symbols-outlined text-sm" style="font-size: 14px;">check_circle</span> Approved
+                                    </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-lg py-md text-body-md">2023-11-19 09:15</td>
+<td class="px-lg py-md text-body-md font-bold">James Bond</td>
+<td class="px-lg py-md text-body-md">Travel Expense</td>
+<td class="px-lg py-md text-body-md">¥ 4,500.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-red-100 text-red-700 rounded-full font-label-sm flex items-center w-fit gap-xs">
+<span class="material-symbols-outlined text-sm" style="font-size: 14px;">cancel</span> Rejected
+                                    </span>
+</td>
+</tr>
+<tr class="hover:bg-surface-container-lowest transition-colors">
+<td class="px-lg py-md text-body-md">2023-11-18 17:45</td>
+<td class="px-lg py-md text-body-md font-bold">Sophia Chen</td>
+<td class="px-lg py-md text-body-md">Software Subscription</td>
+<td class="px-lg py-md text-body-md">¥ 299.00</td>
+<td class="px-lg py-md">
+<span class="px-sm py-xs bg-green-100 text-green-700 rounded-full font-label-sm flex items-center w-fit gap-xs">
+<span class="material-symbols-outlined text-sm" style="font-size: 14px;">check_circle</span> Approved
+                                    </span>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+</div>
+</main>
+<script>
+        // Simple micro-interactions for buttons
+        document.querySelectorAll('button').forEach(button => {
+            button.addEventListener('mousedown', () => {
+                button.classList.add('scale-95');
+            });
+            button.addEventListener('mouseup', () => {
+                button.classList.remove('scale-95');
+            });
+            button.addEventListener('mouseleave', () => {
+                button.classList.remove('scale-95');
+            });
+        });
+    </script>
+</body></html>

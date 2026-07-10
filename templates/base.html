@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>{% block title %}FinFlow Corp{% endblock %}</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/css/app.css"/>
+<script>
+    tailwind.config = {
+        darkMode: "class",
+        theme: {
+            extend: {
+                "colors": {
+                    "on-tertiary-fixed": "#191c1e","on-background": "#0d1c2e","secondary-fixed": "#d4e3ff",
+                    "tertiary-container": "#484c4e","on-error-container": "#93000a","error": "#ba1a1a",
+                    "outline-variant": "#c4c5d5","on-error": "#ffffff","on-secondary-container": "#003c70",
+                    "inverse-primary": "#b8c4ff","surface-container-low": "#eff4ff","surface-variant": "#d5e3fc",
+                    "inverse-on-surface": "#eaf1ff","secondary-fixed-dim": "#a4c9ff","primary-fixed": "#dde1ff",
+                    "primary-fixed-dim": "#b8c4ff","on-primary-container": "#a8b8ff","secondary-container": "#64a8fe",
+                    "tertiary-fixed-dim": "#c4c7c9","tertiary-fixed": "#e0e3e5","on-surface-variant": "#444653",
+                    "error-container": "#ffdad6","surface": "#f8f9ff","surface-container": "#e6eeff",
+                    "primary": "#00288e","surface-dim": "#ccdbf3","surface-container-lowest": "#ffffff",
+                    "on-tertiary-container": "#b9bcbe","on-primary-fixed-variant": "#173bab","tertiary": "#323537",
+                    "background": "#f8f9ff","on-surface": "#0d1c2e","on-secondary-fixed-variant": "#004883",
+                    "on-secondary": "#ffffff","on-primary": "#ffffff","inverse-surface": "#233144",
+                    "on-secondary-fixed": "#001c39","on-tertiary-fixed-variant": "#444749","surface-bright": "#f8f9ff",
+                    "surface-container-highest": "#d5e3fc","surface-container-high": "#dce9ff","on-primary-fixed": "#001453",
+                    "outline": "#757684","primary-container": "#1e40af","secondary": "#0060ac",
+                    "surface-tint": "#3755c3","on-tertiary": "#ffffff"
+                },
+                "borderRadius": { "DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem" },
+                "spacing": { "xl": "32px", "sm": "8px", "lg": "24px", "xs": "4px", "margin-desktop": "32px",
+                    "gutter": "20px", "sidebar-width": "260px", "margin-mobile": "16px", "base": "4px", "md": "16px" },
+                "fontFamily": { "label-md": ["Inter"], "body-md": ["Inter"], "body-lg": ["Inter"],
+                    "headline-sm": ["Inter"], "headline-md": ["Inter"], "display-lg-mobile": ["Inter"],
+                    "label-sm": ["Inter"], "display-lg": ["Inter"] },
+                "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "500"}],
+                    "body-md": ["14px", {"lineHeight": "20px", "fontWeight": "400"}],
+                    "body-lg": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-sm": ["16px", {"lineHeight": "24px", "fontWeight": "600"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "display-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "label-sm": ["11px", {"lineHeight": "14px", "fontWeight": "600"}],
+                    "display-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+                }
+            },
+        },
+    }
+</script>
+<script src="/static/js/api.js"></script>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen">
+{% set active_page = active_page|default('chat') %}
+
+<!-- SideNavBar -->
+<aside class="bg-primary-container text-on-primary fixed left-0 top-0 w-[260px] h-full flex flex-col py-lg border-r border-outline-variant z-50">
+    <div class="px-md mb-xl">
+        <h1 class="font-headline-md text-headline-md font-bold text-on-primary">FinFlow Corp</h1>
+        <p class="font-label-md text-label-md opacity-70">Enterprise Finance</p>
+    </div>
+    <button class="mx-md mb-xl bg-on-primary text-primary-container font-headline-sm text-headline-sm py-sm rounded-lg flex items-center justify-center gap-xs hover:bg-surface transition-all active:scale-95" onclick="window.location.href='/chat'">
+        <span class="material-symbols-outlined">add</span>
+        New Report
+    </button>
+    <nav class="flex-1 space-y-xs overflow-y-auto">
+        <a href="/chat" class="flex items-center gap-md px-md py-sm text-on-primary {% if active_page == 'chat' %}opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10{% else %}opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5{% endif %} transition-all cursor-pointer no-underline">
+            <span class="material-symbols-outlined">chat_bubble</span>
+            <span class="font-label-md text-label-md">智能报销 Chat Reimbursement</span>
+        </a>
+        <a href="/progress" class="flex items-center gap-md px-md py-sm text-on-primary {% if active_page == 'progress' %}opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10{% else %}opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5{% endif %} transition-all cursor-pointer no-underline">
+            <span class="material-symbols-outlined">account_tree</span>
+            <span class="font-label-md text-label-md">进度查询 Progress Tracking</span>
+        </a>
+        <a href="/budget" class="flex items-center gap-md px-md py-sm text-on-primary {% if active_page == 'budget' %}opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10{% else %}opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5{% endif %} transition-all cursor-pointer no-underline">
+            <span class="material-symbols-outlined">pie_chart</span>
+            <span class="font-label-md text-label-md">预算概览 Budget Overview</span>
+        </a>
+        <a href="/approval" class="flex items-center gap-md px-md py-sm text-on-primary {% if active_page == 'approval' %}opacity-100 border-l-4 border-surface-container-lowest bg-on-primary-fixed-variant/10{% else %}opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5{% endif %} transition-all cursor-pointer no-underline">
+            <span class="material-symbols-outlined">rule</span>
+            <span class="font-label-md text-label-md">审批中心 Approval Center</span>
+        </a>
+    </nav>
+    <div class="px-md pt-md border-t border-on-primary/10">
+        <div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer">
+            <span class="material-symbols-outlined">settings</span>
+            <span class="font-label-md text-label-md">Settings</span>
+        </div>
+        <div class="flex items-center gap-md px-md py-sm text-on-primary/70 opacity-70 hover:opacity-100 hover:bg-on-primary-fixed-variant/5 transition-all cursor-pointer" onclick="logout()">
+            <span class="material-symbols-outlined">logout</span>
+            <span class="font-label-md text-label-md">Logout</span>
+        </div>
+    </div>
+</aside>
+
+<!-- Main Content Shell -->
+<div class="ml-[260px] flex flex-col min-h-screen">
+    <!-- TopNavBar -->
+    <header class="h-16 w-full sticky top-0 bg-surface border-b border-outline-variant flex justify-between items-center px-margin-desktop z-40">
+        <div class="flex items-center gap-lg">
+            <span class="font-headline-sm text-headline-sm font-bold text-primary">FinFlow</span>
+            <div class="relative">
+                <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline">search</span>
+                <input class="pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-lg text-body-md focus:ring-2 focus:ring-primary w-64 transition-all" placeholder="Search resources..." type="text"/>
+            </div>
+        </div>
+        <div class="flex items-center gap-md">
+            <div class="flex gap-sm border-r border-outline-variant pr-md mr-md">
+                <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">notifications</span>
+                <span class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors">help_outline</span>
+            </div>
+            <div class="flex items-center gap-sm">
+                <span class="font-body-md text-body-md text-on-surface-variant">English/中文</span>
+                <div class="flex items-center gap-sm cursor-pointer" id="user-info-area">
+                    <div class="w-8 h-8 rounded-full bg-secondary-container flex items-center justify-center">
+                        <span class="material-symbols-outlined text-on-secondary-container text-[18px]">person</span>
+                    </div>
+                    <span class="font-label-md text-label-md text-on-surface-variant" id="user-name-display">User</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Page Content -->
+    <main class="flex-1">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<script>
+// 初始化用户信息
+(function() {
+    const user = getCurrentUser();
+    if (user) {
+        const display = document.getElementById('user-name-display');
+        if (display) {
+            display.textContent = user.name || user.username;
+        }
+    } else {
+        window.location.href = '/login';
+    }
+})();
+</script>
+</body>
+</html>

@@ -55,8 +55,6 @@ def run_agent(user_query: str, chat_history: list = None):
         full_response = ""
         
         for chunk in agent.stream({"messages": messages}):
-            print(chunk)
-            
             if isinstance(chunk, dict):
                 if "model" in chunk:
                     model_data = chunk["model"]
