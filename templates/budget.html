@@ -7,25 +7,28 @@
     <div class="flex justify-between items-end mb-xl">
         <div>
             <h2 class="font-display-lg text-display-lg text-primary">Department Budget Dashboard</h2>
-            <p class="font-headline-sm text-headline-sm text-on-surface-variant">部门预算看板 — FY2024 Global Overview</p>
+            <p class="font-headline-sm text-headline-sm text-on-surface-variant" id="page-subtitle">预算看板 — 加载中...</p>
         </div>
         <div class="flex gap-sm">
             <button class="px-md py-sm rounded-lg border border-outline-variant bg-white text-primary font-label-md flex items-center gap-2 hover:bg-surface-container transition-colors">
                 <span class="material-symbols-outlined text-[18px]">file_download</span>
                 Export PDF
             </button>
-            <button class="px-md py-sm rounded-lg bg-primary text-white font-label-md flex items-center gap-2 hover:opacity-90 transition-opacity">
-                <span class="material-symbols-outlined text-[18px]">tune</span>
-                Adjust Allocation
-            </button>
         </div>
+    </div>
+
+    <!-- No Permission Message -->
+    <div id="no-permission" class="hidden glass-card p-xl rounded-xl text-center">
+        <span class="material-symbols-outlined text-[48px] text-on-surface-variant mb-md block">lock</span>
+        <h3 class="font-headline-md text-headline-md text-on-surface-variant mb-sm">无访问权限</h3>
+        <p class="font-body-md text-on-surface-variant">普通员工无法查看预算概览，如需了解请咨询部门经理。</p>
     </div>
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-3 gap-lg mb-xl" id="summary-cards">
         <div class="glass-card p-lg rounded-xl flex flex-col gap-md">
             <div class="flex justify-between items-center">
-                <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Total Corporate Budget</span>
+                <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider" id="budget-label">Total Corporate Budget</span>
                 <span class="material-symbols-outlined text-primary">payments</span>
             </div>
             <span class="font-display-lg text-display-lg" id="total-budget">--</span>
@@ -37,7 +40,7 @@
             </div>
             <span class="font-display-lg text-display-lg" id="total-spent">--</span>
         </div>
-        <div class="glass-card p-lg rounded-xl flex flex-col gap-md">
+        <div class="glass-card p-lg rounded-xl flex flex-col gap-md" id="dept-card">
             <div class="flex justify-between items-center">
                 <span class="font-label-md text-label-md text-on-surface-variant uppercase tracking-wider">Active Departments</span>
                 <span class="material-symbols-outlined text-orange-500">groups</span>
@@ -46,10 +49,10 @@
         </div>
     </div>
 
-    <!-- Department Table -->
-    <div class="glass-card rounded-xl overflow-hidden">
+    <!-- Budget Table -->
+    <div class="glass-card rounded-xl overflow-hidden mb-xl" id="budget-table-card">
         <div class="p-lg border-b border-outline-variant flex justify-between items-center bg-white">
-            <h3 class="font-headline-md text-headline-md">Budget Utilization by Department <span class="font-normal text-on-surface-variant ml-2">各部门预算执行详情</span></h3>
+            <h3 class="font-headline-md text-headline-md" id="table-title">Budget Utilization <span class="font-normal text-on-surface-variant ml-2">预算执行详情</span></h3>
             <div class="flex gap-md">
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-green-500"></div><span class="font-label-sm text-label-sm text-on-surface-variant">Healthy (&gt;30%)</span></div>
                 <div class="flex items-center gap-1.5"><div class="w-3 h-3 rounded-full bg-yellow-500"></div><span class="font-label-sm text-label-sm text-on-surface-variant">Warning (10-30%)</span></div>
@@ -58,7 +61,7 @@
         </div>
         <div class="overflow-x-auto">
             <table class="w-full text-left">
-                <thead class="bg-surface-container-low border-b border-outline-variant">
+                <thead class="bg-surface-container-low border-b border-outline-variant" id="budget-thead">
                     <tr>
                         <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Dept Name (部门)</th>
                         <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Progress (进度)</th>
@@ -73,6 +76,26 @@
             </table>
         </div>
     </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-2 gap-lg" id="charts-section">
+        <div class="glass-card rounded-xl overflow-hidden">
+            <div class="p-lg border-b border-outline-variant bg-white">
+                <h3 class="font-headline-md text-headline-md" id="bar-chart-title">月度报销趋势</h3>
+            </div>
+            <div class="p-lg bg-white">
+                <canvas id="barChart" height="280"></canvas>
+            </div>
+        </div>
+        <div class="glass-card rounded-xl overflow-hidden">
+            <div class="p-lg border-b border-outline-variant bg-white">
+                <h3 class="font-headline-md text-headline-md" id="pie-chart-title">各类别报销占比</h3>
+            </div>
+            <div class="p-lg bg-white flex items-center justify-center">
+                <canvas id="pieChart" height="280"></canvas>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -82,53 +105,280 @@ function getProgressColor(remainingPct) {
     return { bg: 'bg-red-500', text: 'text-red-600', label: 'Critical' };
 }
 
+// Chart.js 全局配置
+const CHART_COLORS = [
+    'rgba(54, 162, 235, 0.85)',
+    'rgba(255, 99, 132, 0.85)',
+    'rgba(255, 206, 86, 0.85)',
+    'rgba(75, 192, 192, 0.85)',
+    'rgba(153, 102, 255, 0.85)',
+    'rgba(255, 159, 64, 0.85)',
+];
+const CHART_BORDERS = [
+    'rgba(54, 162, 235, 1)',
+    'rgba(255, 99, 132, 1)',
+    'rgba(255, 206, 86, 1)',
+    'rgba(75, 192, 192, 1)',
+    'rgba(153, 102, 255, 1)',
+    'rgba(255, 159, 64, 1)',
+];
+
+let barChartInstance = null;
+let pieChartInstance = null;
+
+function renderBarChart(labels, data, title) {
+    const ctx = document.getElementById('barChart').getContext('2d');
+    if (barChartInstance) barChartInstance.destroy();
+
+    document.getElementById('bar-chart-title').textContent = title;
+
+    barChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '报销金额（元）',
+                data: data,
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                borderRadius: 6,
+                hoverBackgroundColor: 'rgba(54, 162, 235, 0.9)',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 12 },
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(ctx) {
+                            return '报销金额：¥ ' + Number(ctx.raw).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(v) { return '¥' + (v >= 10000 ? (v/10000).toFixed(0) + '万' : v.toLocaleString()); },
+                        font: { size: 11 }
+                    },
+                    grid: { color: 'rgba(0,0,0,0.06)' }
+                },
+                x: {
+                    ticks: { font: { size: 11 } },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+function renderPieChart(pieData, title) {
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    if (pieChartInstance) pieChartInstance.destroy();
+
+    document.getElementById('pie-chart-title').textContent = title;
+
+    const labels = pieData.map(d => d.name);
+    const values = pieData.map(d => d.value);
+
+    pieChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: CHART_COLORS.slice(0, labels.length),
+                borderColor: CHART_BORDERS.slice(0, labels.length),
+                borderWidth: 2,
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        padding: 16,
+                        usePointStyle: true,
+                        pointStyleWidth: 12,
+                        font: { size: 12 }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 12 },
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(ctx) {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((ctx.raw / total) * 100).toFixed(1);
+                            return ctx.label + '：¥ ' + Number(ctx.raw).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '（' + pct + '%）';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 async function loadBudgets() {
     try {
-        const [deptData, summary] = await Promise.all([
+        const [data, summary, charts] = await Promise.all([
             getAllBudgets(),
-            getBudgetSummary()
+            getBudgetSummary(),
+            getBudgetCharts()
         ]);
 
+        // 普通员工无权限
+        if (summary.error || data.error) {
+            document.getElementById('summary-cards').classList.add('hidden');
+            document.getElementById('budget-table-card').classList.add('hidden');
+            document.getElementById('charts-section').classList.add('hidden');
+            document.getElementById('no-permission').classList.remove('hidden');
+            return;
+        }
+
+        const role = summary.role || data.role;
+
+        // 设置摘要卡片
         document.getElementById('total-budget').textContent = formatMoney(summary.total_budget);
         document.getElementById('total-spent').textContent = formatMoney(summary.total_spent);
-        document.getElementById('dept-count').textContent = summary.department_count;
 
-        const tbody = document.getElementById('budget-table-body');
-        tbody.innerHTML = '';
+        if (role === 'manager' || role === 'director') {
+            // 经理/总监视图
+            document.getElementById('budget-label').textContent = '部门总预算';
+            document.getElementById('page-subtitle').textContent = `部门预算看板 — ${summary.department_name || ''}`;
+            document.getElementById('dept-card').classList.add('hidden');
+            document.getElementById('summary-cards').className = 'grid grid-cols-2 gap-lg mb-xl';
+            document.getElementById('table-title').innerHTML = `Budget by Category <span class="font-normal text-on-surface-variant ml-2">${summary.department_name} 各类别预算执行详情</span>`;
 
-        deptData.departments.forEach(dept => {
-            const usedPct = dept.usage_rate;
-            const remainingPct = 100 - usedPct;
-            const colors = getProgressColor(remainingPct);
-
-            const row = document.createElement('tr');
-            row.className = 'hover:bg-surface-container/30 transition-colors cursor-pointer';
-            row.innerHTML = `
-                <td class="px-lg py-md">
-                    <div class="flex flex-col">
-                        <span class="font-headline-sm text-headline-sm text-primary">${dept.department_name}</span>
-                        <span class="font-label-sm text-label-sm text-on-surface-variant">ID: ${dept.department_id}</span>
-                    </div>
-                </td>
-                <td class="px-lg py-md w-1/3">
-                    <div class="flex flex-col gap-2">
-                        <div class="flex justify-between items-center">
-                            <span class="font-label-sm text-label-sm font-bold ${colors.text}">${remainingPct.toFixed(0)}% Available</span>
-                            <span class="font-label-sm text-label-sm text-on-surface-variant">${usedPct.toFixed(0)}% Used</span>
-                        </div>
-                        <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
-                            <div class="h-full ${colors.bg} rounded-full" style="width: ${usedPct}%"></div>
-                        </div>
-                    </div>
-                </td>
-                <td class="px-lg py-md text-right font-body-md">${formatMoney(dept.budget_amount)}</td>
-                <td class="px-lg py-md text-right font-body-md">${formatMoney(dept.spent_amount)}</td>
-                <td class="px-lg py-md text-right font-body-md font-bold ${colors.text}">${formatMoney(dept.remaining_amount)}</td>
+            // 表头改为报销类别
+            document.getElementById('budget-thead').innerHTML = `
+                <tr>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">报销类别</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Progress (进度)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Total Budget (总预算)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Spent (已支出)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Remaining (剩余)</th>
+                </tr>
             `;
-            tbody.appendChild(row);
-        });
+
+            // 渲染类别行
+            const tbody = document.getElementById('budget-table-body');
+            tbody.innerHTML = '';
+            const categories = data.categories || [];
+            categories.forEach(cat => {
+                const usedPct = cat.usage_rate;
+                const remainingPct = 100 - usedPct;
+                const colors = getProgressColor(remainingPct);
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-surface-container/30 transition-colors cursor-pointer';
+                row.innerHTML = `
+                    <td class="px-lg py-md">
+                        <div class="flex flex-col">
+                            <span class="font-headline-sm text-headline-sm text-primary">${cat.expense_type}</span>
+                        </div>
+                    </td>
+                    <td class="px-lg py-md w-1/3">
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="font-label-sm text-label-sm font-bold ${colors.text}">${remainingPct.toFixed(0)}% Available</span>
+                                <span class="font-label-sm text-label-sm text-on-surface-variant">${usedPct.toFixed(0)}% Used</span>
+                            </div>
+                            <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                                <div class="h-full ${colors.bg} rounded-full" style="width: ${usedPct}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-lg py-md text-right font-body-md">${formatMoney(cat.budget_amount)}</td>
+                    <td class="px-lg py-md text-right font-body-md">${formatMoney(cat.spent_amount)}</td>
+                    <td class="px-lg py-md text-right font-body-md font-bold ${colors.text}">${formatMoney(cat.remaining_amount)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+
+        } else {
+            // 总经理/admin视图
+            document.getElementById('page-subtitle').textContent = '公司预算看板 — Global Overview';
+            document.getElementById('dept-count').textContent = summary.department_count;
+            document.getElementById('summary-cards').className = 'grid grid-cols-3 gap-lg mb-xl';
+
+            document.getElementById('table-title').innerHTML = `Budget Utilization by Department <span class="font-normal text-on-surface-variant ml-2">各部门预算执行详情</span>`;
+
+            // 表头为部门
+            document.getElementById('budget-thead').innerHTML = `
+                <tr>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Dept Name (部门)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase">Progress (进度)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Total Budget (总预算)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Spent (已支出)</th>
+                    <th class="px-lg py-md font-label-md text-label-md text-on-surface-variant uppercase text-right">Remaining (剩余)</th>
+                </tr>
+            `;
+
+            const tbody = document.getElementById('budget-table-body');
+            tbody.innerHTML = '';
+            const departments = data.departments || [];
+            departments.forEach(dept => {
+                const usedPct = dept.usage_rate;
+                const remainingPct = 100 - usedPct;
+                const colors = getProgressColor(remainingPct);
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-surface-container/30 transition-colors cursor-pointer';
+                row.innerHTML = `
+                    <td class="px-lg py-md">
+                        <div class="flex flex-col">
+                            <span class="font-headline-sm text-headline-sm text-primary">${dept.department_name}</span>
+                            <span class="font-label-sm text-label-sm text-on-surface-variant">ID: ${dept.department_id}</span>
+                        </div>
+                    </td>
+                    <td class="px-lg py-md w-1/3">
+                        <div class="flex flex-col gap-2">
+                            <div class="flex justify-between items-center">
+                                <span class="font-label-sm text-label-sm font-bold ${colors.text}">${remainingPct.toFixed(0)}% Available</span>
+                                <span class="font-label-sm text-label-sm text-on-surface-variant">${usedPct.toFixed(0)}% Used</span>
+                            </div>
+                            <div class="h-2 w-full bg-surface-container rounded-full overflow-hidden">
+                                <div class="h-full ${colors.bg} rounded-full" style="width: ${usedPct}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-lg py-md text-right font-body-md">${formatMoney(dept.budget_amount)}</td>
+                    <td class="px-lg py-md text-right font-body-md">${formatMoney(dept.spent_amount)}</td>
+                    <td class="px-lg py-md text-right font-body-md font-bold ${colors.text}">${formatMoney(dept.remaining_amount)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // 渲染图表
+        if (charts && !charts.error) {
+            renderBarChart(charts.bar_labels, charts.bar_data, charts.bar_title);
+            renderPieChart(charts.pie_data, charts.pie_title);
+        } else {
+            document.getElementById('charts-section').classList.add('hidden');
+        }
+
     } catch (err) {
         console.error('Failed to load budget data:', err);
+        if (err.message && err.message.includes('401')) {
+            window.location.href = '/login';
+            return;
+        }
         document.getElementById('budget-table-body').innerHTML =
             '<tr><td colspan="5" class="text-center py-xl text-error">加载失败，请刷新重试</td></tr>';
     }

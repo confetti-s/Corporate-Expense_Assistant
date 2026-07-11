@@ -15,6 +15,14 @@ body {
 .chat-container::-webkit-scrollbar-track { background: transparent; }
 .chat-container::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
 
+/* 聊天消息行间距 */
+#chat-messages .font-body-md {
+    line-height: 22px;
+}
+.markdown-body p {
+    line-height: 22px;
+}
+
 /* 玻璃效果 */
 .glass-effect {
     background: rgba(255, 255, 255, 0.8);
