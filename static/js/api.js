@@ -159,6 +159,17 @@ async function getProgressStats() {
     return await res.json();
 }
 
+async function checkPDFExists(reimbursementNo) {
+    try {
+        const res = await fetch(`${API_BASE}/api/progress/pdf/${reimbursementNo}`);
+        if (!res.ok) return { exists: false };
+        return await res.json();
+    } catch (e) {
+        console.warn('PDF check failed:', e);
+        return { exists: false };
+    }
+}
+
 // ====== 审批相关 ======
 
 async function getPendingApprovals(params = {}) {

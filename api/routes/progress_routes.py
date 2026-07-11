@@ -1,9 +1,11 @@
 """进度查询相关 API 路由"""
+import os
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from src.db.database import SessionLocal
 from src.db.models import Reimbursements, ApprovalRecords, Invoice, DepartmentBudget
 from api.auth import get_current_user
+from config import OUTPUTS_DIR
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/progress", tags=["progress"])
@@ -151,5 +153,34 @@ def get_progress_stats(user: dict = Depends(get_current_user)):
             "rejected_count": rejected,
             "month_total_amount": round(float(month_amount), 2),
         }
+    finally:
+        db.close()
+
+
+@router.get("/pdf/{reimbursement_no}")
+def check_pdf_exists(reimbursement_no: str, user: dict = Depends(get_current_user)):
+    """检查报销单PDF文件是否存在，返回文件URL"""
+    db = SessionLocal()
+    try:
+        reimbursement = db.query(Reimbursements).filter_by(
+            reimbursement_no=reimbursement_no
+        ).first()
+        if not reimbursement:
+            return {"exists": False, "error": "报销单不存在"}
+
+        if user["role"] not in ("manager", "admin") and reimbursement.employee_id != user["user_id"]:
+            return {"exists": False, "error": "无权访问"}
+
+        pdf_filename = f"reimbursement_{reimbursement_no}.pdf"
+        pdf_path = os.path.join(OUTPUTS_DIR, pdf_filename)
+
+        if os.path.exists(pdf_path):
+            return {
+                "exists": True,
+                "pdf_url": f"/outputs/{pdf_filename}",
+                "reimbursement_no": reimbursement_no,
+            }
+        else:
+            return {"exists": False, "pdf_url": None}
     finally:
         db.close()

@@ -177,6 +177,12 @@ function isImageFile(filePath) {
     return ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp'].includes(ext);
 }
 
+function isPDFile(filePath) {
+    if (!filePath) return false;
+    const ext = filePath.split('.').pop().toLowerCase();
+    return ext === 'pdf';
+}
+
 function addUploadedItems(filePaths, fileType, ocrResult) {
     const items = fileType === 'voucher'
         ? (ocrResult.vouchers || [])
@@ -192,6 +198,7 @@ function addUploadedItems(filePaths, fileType, ocrResult) {
             typeName: item.type_name || item.voucher_type || '',
             recordId: item.invoice_id || item.voucher_id || null,
             isImage: isImageFile(fp),
+            isPDF: isPDFile(fp),
             time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
         });
     });
@@ -204,9 +211,10 @@ function renderUploadedList() {
     const countEl = document.getElementById('uploaded-count');
     const emptyHint = document.getElementById('uploaded-empty-hint');
 
-    countEl.textContent = `${uploadedItems.length} 项`;
+    const visibleItems = uploadedItems.filter(i => i.fileType !== 'reimbursement');
+    countEl.textContent = `${visibleItems.length} 项`;
 
-    if (uploadedItems.length === 0) {
+    if (visibleItems.length === 0) {
         container.innerHTML = '';
         container.appendChild(createElement('div', {className: 'text-center text-label-sm text-on-surface-variant py-lg', id: 'uploaded-empty-hint'}, '暂无已上传文件'));
         return;
@@ -214,6 +222,8 @@ function renderUploadedList() {
 
     container.innerHTML = '';
     uploadedItems.forEach((item, idx) => {
+        // 报销单项不再单独显示，仅保留PDF文件项
+        if (item.fileType === 'reimbursement') return;
         let bgClass, icon, iconColor, label;
         if (item.fileType === 'voucher') {
             bgClass = 'bg-orange-50 border-orange-200';
@@ -225,6 +235,11 @@ function renderUploadedList() {
             icon = 'description';
             iconColor = 'text-emerald-600';
             label = '报销单';
+        } else if (item.fileType === 'pdf') {
+            bgClass = 'bg-red-50 border-red-200';
+            icon = 'picture_as_pdf';
+            iconColor = 'text-red-500';
+            label = 'PDF';
         } else {
             bgClass = 'bg-blue-50 border-blue-200';
             icon = 'receipt_long';
@@ -235,9 +250,19 @@ function renderUploadedList() {
         const div = document.createElement('div');
         div.className = `flex items-center gap-sm p-xs rounded-lg border ${bgClass} cursor-pointer hover:shadow-sm transition-all`;
         if (item.fileType === 'reimbursement') {
-            div.onclick = () => { window.location.href = '/progress'; };
+            if (item.status === '已提交' && item.pdfUrl) {
+                div.onclick = () => { window.open(item.pdfUrl, '_blank'); };
+            } else {
+                div.onclick = () => { window.location.href = '/progress'; };
+            }
+        } else if (item.fileType === 'pdf') {
+            div.onclick = () => { window.open(item.pdfUrl, '_blank'); };
         } else {
-            div.onclick = () => { if (item.isImage) openImageModal(filePathToUrl(item.filePath)); };
+            if (item.isPDF && item.fileType !== 'voucher') {
+                div.onclick = () => { window.open(filePathToUrl(item.filePath), '_blank'); };
+            } else {
+                div.onclick = () => { if (item.isImage) openImageModal(filePathToUrl(item.filePath)); };
+            }
         }
 
         if (item.fileType === 'reimbursement') {
@@ -255,12 +280,28 @@ function renderUploadedList() {
                 </div>
                 <span class="material-symbols-outlined text-outline text-[14px] shrink-0">open_in_new</span>
             `;
+        } else if (item.fileType === 'pdf') {
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded bg-white flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined ${iconColor} text-[20px]">${icon}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-[11px] font-medium text-on-surface truncate" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</p>
+                    <p class="text-[10px] text-on-surface-variant">
+                        <span class="${iconColor} font-bold">${item.amount > 0 ? formatMoney(item.amount) : ''}</span>
+                        ${item.typeName ? ' · ' + escapeHtml(item.typeName) : ''}
+                    </p>
+                </div>
+                <span class="material-symbols-outlined text-outline text-[14px] shrink-0">open_in_new</span>
+            `;
         } else {
             div.innerHTML = `
                 <div class="w-10 h-10 rounded bg-white flex items-center justify-center overflow-hidden shrink-0">
-                    ${item.isImage
-                        ? `<img src="${filePathToUrl(item.filePath)}" alt="" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=\\'material-symbols-outlined text-outline text-[18px]\\'>broken_image</span>'"/>`
-                        : `<span class="material-symbols-outlined text-outline text-[18px]">description</span>`
+                    ${item.isPDF && item.fileType !== 'voucher'
+                        ? `<span class="material-symbols-outlined text-red-500 text-[20px]">picture_as_pdf</span>`
+                        : item.isImage
+                            ? `<img src="${filePathToUrl(item.filePath)}" alt="" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=\\'material-symbols-outlined text-outline text-[18px]\\'>broken_image</span>'"/>`
+                            : `<span class="material-symbols-outlined text-outline text-[18px]">description</span>`
                     }
                 </div>
                 <div class="flex-1 min-w-0">
@@ -300,24 +341,38 @@ function createElement(tag, attrs, text) {
 
 function parseAndAddReimbursements(text) {
     if (!text) return;
-    const reimbPattern = /报销单号[：:]?\s*(RB\d{8})/g;
-    const seen = new Set(uploadedItems.filter(i => i.fileType === 'reimbursement').map(i => i.reportNo));
+    const reimbPattern = /报销单号?[：:]?\s*(RB\d{8})/g;
     let match;
     while ((match = reimbPattern.exec(text)) !== null) {
         const reportNo = match[1];
-        if (seen.has(reportNo)) continue;
-        seen.add(reportNo);
+
+        // 提取状态
+        let status = '';
+        if (text.includes('提交处理完成') || text.includes('提交审批成功')) status = '已提交';
+        else if (text.includes('待审批') || text.includes('等待您审批') || text.includes('等待审批') || text.includes('审批中')) status = '已提交';
+        else if (text.includes('已确认')) status = '已确认';
+        else if (text.includes('创建成功') || text.includes('创建完成')) status = '草稿';
+
+        // 检查是否已有该报销单，如果有则更新状态
+        const existingItem = uploadedItems.find(i => i.fileType === 'reimbursement' && i.reportNo === reportNo);
+        if (existingItem) {
+            const oldStatus = existingItem.status;
+            if (status && status !== oldStatus) {
+                existingItem.status = status;
+                // 状态变为已提交时，通过API验证PDF是否存在后添加
+                if (status === '已提交') {
+                    verifyAndAddPDFItem(reportNo, existingItem.amount, existingItem.typeName);
+                }
+                renderUploadedList();
+                persistSession();
+            }
+            continue;
+        }
 
         // 提取金额
         let amount = 0;
         const amtMatch = text.match(/金额[：:]?\s*([\d,]+\.?\d*)\s*元/);
         if (amtMatch) amount = parseFloat(amtMatch[1].replace(/,/g, '')) || 0;
-
-        // 提取状态
-        let status = '';
-        if (text.includes('提交处理完成') || text.includes('提交审批成功')) status = '已提交';
-        else if (text.includes('已确认')) status = '已确认';
-        else if (text.includes('创建成功') || text.includes('创建完成')) status = '草稿';
 
         // 提取员工
         let employee = '';
@@ -339,10 +394,61 @@ function parseAndAddReimbursements(text) {
             status: status,
             employee: employee,
             isImage: false,
+            pdfUrl: `/outputs/reimbursement_${reportNo}.pdf`,
             time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
         });
+
+        // 如果已提交，通过API验证PDF是否存在后添加
+        if (status === '已提交') {
+            verifyAndAddPDFItem(reportNo, amount, expType);
+        }
+
         renderUploadedList();
         persistSession();
+    }
+}
+
+async function verifyAndAddPDFItem(reportNo, amount, typeName) {
+    const alreadyExists = uploadedItems.some(i => i.fileType === 'pdf' && i.reportNo === reportNo);
+    if (alreadyExists) return;
+    try {
+        const result = await checkPDFExists(reportNo);
+        if (result.exists) {
+            addPDFItem(reportNo, amount, typeName);
+        }
+    } catch (e) {
+        console.warn('PDF verification failed:', e);
+    }
+}
+
+function addPDFItem(reportNo, amount, typeName) {
+    const alreadyExists = uploadedItems.some(i => i.fileType === 'pdf' && i.reportNo === reportNo);
+    if (alreadyExists) return;
+    uploadedItems.push({
+        filePath: null,
+        filename: `报销单_${reportNo}.pdf`,
+        fileType: 'pdf',
+        amount: amount,
+        typeName: typeName,
+        reportNo: reportNo,
+        pdfUrl: `/outputs/reimbursement_${reportNo}.pdf`,
+        isImage: false,
+        time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+    });
+    renderUploadedList();
+    persistSession();
+}
+
+function parseAndAddPDFs(text) {
+    if (!text) return;
+    const pdfPattern = /reimbursement_(RB\d{8})\.pdf/gi;
+    let match;
+    while ((match = pdfPattern.exec(text)) !== null) {
+        const reportNo = match[1];
+        const reimbItem = uploadedItems.find(i => i.fileType === 'reimbursement' && i.reportNo === reportNo);
+        const amount = reimbItem ? reimbItem.amount : 0;
+        const typeName = reimbItem ? reimbItem.typeName : '';
+        verifyAndAddPDFItem(reportNo, amount, typeName);
     }
 }
 
@@ -534,6 +640,7 @@ async function sendMessage() {
         if (result.text) {
             aiMsgEl.innerHTML = marked.parse(result.text);
             parseAndAddReimbursements(result.text);
+            parseAndAddPDFs(result.text);
         } else if (!aiMsgEl.textContent || aiMsgEl.textContent === '') {
             aiMsgEl.textContent = 'AI助手未返回内容，请检查API配置或稍后重试。';
         }

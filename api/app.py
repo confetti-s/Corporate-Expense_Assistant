@@ -28,6 +28,10 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 if os.path.exists("uploads"):
     app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
+# 报销单PDF输出目录
+if os.path.exists("outputs"):
+    app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+
 # Jinja2 环境 (手动创建以避免 Starlette cache 兼容问题)
 _jinja_env = Environment(
     loader=FileSystemLoader(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")),
