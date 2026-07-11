@@ -50,7 +50,7 @@
     </div>
 
     <!-- Budget Table -->
-    <div class="glass-card rounded-xl overflow-hidden" id="budget-table-card">
+    <div class="glass-card rounded-xl overflow-hidden mb-xl" id="budget-table-card">
         <div class="p-lg border-b border-outline-variant flex justify-between items-center bg-white">
             <h3 class="font-headline-md text-headline-md" id="table-title">Budget Utilization <span class="font-normal text-on-surface-variant ml-2">预算执行详情</span></h3>
             <div class="flex gap-md">
@@ -76,6 +76,26 @@
             </table>
         </div>
     </div>
+
+    <!-- Charts Section -->
+    <div class="grid grid-cols-2 gap-lg" id="charts-section">
+        <div class="glass-card rounded-xl overflow-hidden">
+            <div class="p-lg border-b border-outline-variant bg-white">
+                <h3 class="font-headline-md text-headline-md" id="bar-chart-title">月度报销趋势</h3>
+            </div>
+            <div class="p-lg bg-white">
+                <canvas id="barChart" height="280"></canvas>
+            </div>
+        </div>
+        <div class="glass-card rounded-xl overflow-hidden">
+            <div class="p-lg border-b border-outline-variant bg-white">
+                <h3 class="font-headline-md text-headline-md" id="pie-chart-title">各类别报销占比</h3>
+            </div>
+            <div class="p-lg bg-white flex items-center justify-center">
+                <canvas id="pieChart" height="280"></canvas>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
@@ -85,17 +105,149 @@ function getProgressColor(remainingPct) {
     return { bg: 'bg-red-500', text: 'text-red-600', label: 'Critical' };
 }
 
+// Chart.js 全局配置
+const CHART_COLORS = [
+    'rgba(54, 162, 235, 0.85)',
+    'rgba(255, 99, 132, 0.85)',
+    'rgba(255, 206, 86, 0.85)',
+    'rgba(75, 192, 192, 0.85)',
+    'rgba(153, 102, 255, 0.85)',
+    'rgba(255, 159, 64, 0.85)',
+];
+const CHART_BORDERS = [
+    'rgba(54, 162, 235, 1)',
+    'rgba(255, 99, 132, 1)',
+    'rgba(255, 206, 86, 1)',
+    'rgba(75, 192, 192, 1)',
+    'rgba(153, 102, 255, 1)',
+    'rgba(255, 159, 64, 1)',
+];
+
+let barChartInstance = null;
+let pieChartInstance = null;
+
+function renderBarChart(labels, data, title) {
+    const ctx = document.getElementById('barChart').getContext('2d');
+    if (barChartInstance) barChartInstance.destroy();
+
+    document.getElementById('bar-chart-title').textContent = title;
+
+    barChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: '报销金额（元）',
+                data: data,
+                backgroundColor: 'rgba(54, 162, 235, 0.7)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                borderWidth: 1,
+                borderRadius: 6,
+                hoverBackgroundColor: 'rgba(54, 162, 235, 0.9)',
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 12 },
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(ctx) {
+                            return '报销金额：¥ ' + Number(ctx.raw).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(v) { return '¥' + (v >= 10000 ? (v/10000).toFixed(0) + '万' : v.toLocaleString()); },
+                        font: { size: 11 }
+                    },
+                    grid: { color: 'rgba(0,0,0,0.06)' }
+                },
+                x: {
+                    ticks: { font: { size: 11 } },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+}
+
+function renderPieChart(pieData, title) {
+    const ctx = document.getElementById('pieChart').getContext('2d');
+    if (pieChartInstance) pieChartInstance.destroy();
+
+    document.getElementById('pie-chart-title').textContent = title;
+
+    const labels = pieData.map(d => d.name);
+    const values = pieData.map(d => d.value);
+
+    pieChartInstance = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: CHART_COLORS.slice(0, labels.length),
+                borderColor: CHART_BORDERS.slice(0, labels.length),
+                borderWidth: 2,
+                hoverOffset: 8,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: {
+                        padding: 16,
+                        usePointStyle: true,
+                        pointStyleWidth: 12,
+                        font: { size: 12 }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 12 },
+                    padding: 12,
+                    cornerRadius: 8,
+                    callbacks: {
+                        label: function(ctx) {
+                            const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                            const pct = ((ctx.raw / total) * 100).toFixed(1);
+                            return ctx.label + '：¥ ' + Number(ctx.raw).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '（' + pct + '%）';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 async function loadBudgets() {
     try {
-        const [data, summary] = await Promise.all([
+        const [data, summary, charts] = await Promise.all([
             getAllBudgets(),
-            getBudgetSummary()
+            getBudgetSummary(),
+            getBudgetCharts()
         ]);
 
         // 普通员工无权限
         if (summary.error || data.error) {
             document.getElementById('summary-cards').classList.add('hidden');
             document.getElementById('budget-table-card').classList.add('hidden');
+            document.getElementById('charts-section').classList.add('hidden');
             document.getElementById('no-permission').classList.remove('hidden');
             return;
         }
@@ -212,6 +364,15 @@ async function loadBudgets() {
                 tbody.appendChild(row);
             });
         }
+
+        // 渲染图表
+        if (charts && !charts.error) {
+            renderBarChart(charts.bar_labels, charts.bar_data, charts.bar_title);
+            renderPieChart(charts.pie_data, charts.pie_title);
+        } else {
+            document.getElementById('charts-section').classList.add('hidden');
+        }
+
     } catch (err) {
         console.error('Failed to load budget data:', err);
         if (err.message && err.message.includes('401')) {

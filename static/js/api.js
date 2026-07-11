@@ -141,6 +141,11 @@ async function getBudgetSummary() {
     return await res.json();
 }
 
+async function getBudgetCharts() {
+    const res = await fetch(`${API_BASE}/api/budget/charts`);
+    return await res.json();
+}
+
 // ====== 进度查询相关 ======
 
 async function getReimbursementList(params = {}) {
