@@ -327,7 +327,7 @@ def create_reimbursement(
         year = datetime.now().strftime("%Y")
         last_record = db.query(Reimbursements).filter(
             Reimbursements.reimbursement_no.like(f"RB{year}%")
-        ).order_by(Reimbursements.id.desc()).first()
+        ).order_by(Reimbursements.reimbursement_no.desc()).first()
 
         next_seq = 1
         if last_record:
@@ -430,7 +430,7 @@ def _get_next_reimbursement_no(db):
     year = datetime.now().strftime("%Y")
     last_record = db.query(Reimbursements).filter(
         Reimbursements.reimbursement_no.like(f"RB{year}%")
-    ).order_by(Reimbursements.id.desc()).first()
+    ).order_by(Reimbursements.reimbursement_no.desc()).first()
     next_seq = 1
     if last_record:
         try:

@@ -9,20 +9,20 @@ from reportlab.pdfbase.ttfonts import TTFont
 from datetime import datetime
 import json
 import os
+import uuid
 from config import OUTPUTS_DIR
 from src.db.database import SessionLocal
 from src.db.models import Invoice, Voucher, Reimbursements, ApprovalRecords
 
 # 注册中文字体
-_FONT_REGISTERED = False
 CN_FONT = 'Helvetica'
 
 def _ensure_font_registered():
-    global _FONT_REGISTERED, CN_FONT
-    if _FONT_REGISTERED:
-        return
-    _FONT_REGISTERED = True
-    # 优先使用 .ttf 文件，.ttc 文件需要指定 subfontIndex
+    """
+    每次生成PDF时重新注册字体（使用唯一名称），避免 .ttc 字体
+    在多次 doc.build() 后内部 CMAP 数据损坏导致中文变黑块的 ReportLab bug
+    """
+    global CN_FONT
     font_candidates = [
         (r"C:\Windows\Fonts\simhei.ttf", None),
         (r"C:\Windows\Fonts\simfang.ttf", None),
@@ -33,12 +33,13 @@ def _ensure_font_registered():
     for fp, subfont_idx in font_candidates:
         if os.path.exists(fp):
             try:
-                kwargs = {'name': 'SimHei', 'filename': fp}
+                font_name = f'SimHei_{uuid.uuid4().hex[:8]}'
+                kwargs = {'name': font_name, 'filename': fp}
                 if subfont_idx is not None:
                     kwargs['subfontIndex'] = subfont_idx
                 pdfmetrics.registerFont(TTFont(**kwargs))
-                CN_FONT = 'SimHei'
-                print(f"[PDF] 成功注册字体: {fp}")
+                CN_FONT = font_name
+                print(f"[PDF] 成功注册字体: {fp} -> {font_name}")
                 return
             except Exception as e:
                 print(f"[PDF] 注册字体失败 {fp}: {e}")
