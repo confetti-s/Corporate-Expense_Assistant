@@ -237,6 +237,29 @@ def _migrate_add_voucher_valid_fields():
         print(f"[MIGRATION WARNING] add_voucher_valid_fields: {e}")
 
 
+def _migrate_budget_add_expense_type():
+    """为 department_budget 表新增 expense_type 字段，并重建数据（每个部门5行）"""
+    try:
+        inspector = inspect(engine)
+        if 'department_budget' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('department_budget')]
+
+        if 'expense_type' not in existing_columns:
+            with engine.connect() as conn:
+                conn.execute(text("ALTER TABLE department_budget ADD COLUMN expense_type VARCHAR(50)"))
+                conn.commit()
+            print("[MIGRATION] Added expense_type column to department_budget")
+
+            # 将已有数据的 expense_type 设为"总预算"（旧数据兼容）
+            with engine.connect() as conn:
+                conn.execute(text("UPDATE department_budget SET expense_type = '总预算' WHERE expense_type IS NULL"))
+                conn.commit()
+            print("[MIGRATION] Set default expense_type for existing budget rows")
+    except Exception as e:
+        print(f"[MIGRATION WARNING] budget_add_expense_type: {e}")
+
+
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
@@ -250,4 +273,5 @@ def init_db():
     _migrate_add_ai_suggestion()
     _migrate_add_confirmed()
     _migrate_add_voucher_valid_fields()
+    _migrate_budget_add_expense_type()
     print("Database initialized successfully")

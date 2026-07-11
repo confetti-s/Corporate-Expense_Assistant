@@ -441,22 +441,43 @@ def _get_next_reimbursement_no(db):
     return f"RB{year}{str(next_seq).zfill(4)}"
 
 
-def _check_budget_internal(db, department_id, amount):
-    dept = db.query(DepartmentBudget).filter_by(department_id=department_id).first()
-    if not dept:
-        return False, "部门预算信息不存在"
-    
-    spent = db.query(func.sum(Reimbursements.total_amount)).filter(
-        Reimbursements.department_id == department_id,
-        Reimbursements.status == "approved"
-    ).scalar() or 0.0
-    
-    remaining = dept.budget_amount - spent
-    
-    if remaining >= amount:
-        return True, f"预算充足，剩余 {remaining:,.2f} 元"
+def _check_budget_internal(db, department_id, amount, expense_type=""):
+    """检查预算是否充足，按部门+费用类别查询"""
+    if expense_type:
+        budget = db.query(DepartmentBudget).filter_by(
+            department_id=department_id, expense_type=expense_type
+        ).first()
+        if not budget:
+            return False, f"部门 {department_id} 的 {expense_type} 预算信息不存在"
+
+        spent = db.query(func.sum(Reimbursements.total_amount)).filter(
+            Reimbursements.department_id == department_id,
+            Reimbursements.expense_type == expense_type,
+            Reimbursements.status == "approved"
+        ).scalar() or 0.0
+
+        remaining = budget.budget_amount - spent
+        if remaining >= amount:
+            return True, f"【{expense_type}】预算充足，剩余 {remaining:,.2f} 元"
+        else:
+            return False, f"【{expense_type}】预算不足，剩余 {remaining:,.2f} 元，超出 {amount - remaining:,.2f} 元"
     else:
-        return False, f"预算不足，剩余 {remaining:,.2f} 元，超出 {amount - remaining:,.2f} 元"
+        # 兼容：无类别时查总预算
+        budgets = db.query(DepartmentBudget).filter_by(department_id=department_id).all()
+        if not budgets:
+            return False, "部门预算信息不存在"
+
+        total_budget = sum(b.budget_amount for b in budgets)
+        spent = db.query(func.sum(Reimbursements.total_amount)).filter(
+            Reimbursements.department_id == department_id,
+            Reimbursements.status == "approved"
+        ).scalar() or 0.0
+
+        remaining = total_budget - spent
+        if remaining >= amount:
+            return True, f"预算充足，剩余 {remaining:,.2f} 元"
+        else:
+            return False, f"预算不足，剩余 {remaining:,.2f} 元，超出 {amount - remaining:,.2f} 元"
 
 
 def _create_approval_records(db, reimbursement):
@@ -720,7 +741,7 @@ def submit_for_approval(reimbursement_no: str) -> str:
         voucher_amount = sum(v.amount or 0 for v in vouchers)
         total_with_vouchers = reimbursement.total_amount
         
-        budget_sufficient, budget_message = _check_budget_internal(db, reimbursement.department_id, total_with_vouchers)
+        budget_sufficient, budget_message = _check_budget_internal(db, reimbursement.department_id, total_with_vouchers, reimbursement.expense_type)
         
         ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message, valid_vouchers, invalid_vouchers)
         reimbursement.status = "pending"
