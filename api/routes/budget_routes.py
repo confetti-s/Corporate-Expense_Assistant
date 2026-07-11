@@ -9,7 +9,17 @@ router = APIRouter(prefix="/api/budget", tags=["budget"])
 
 EXPENSE_TYPES = ["差旅费", "业务招待费", "日常交通费", "办公用品", "其他费用"]
 
+# 只有行政部(D006)才有办公用品预算
+OFFICE_SUPPLIES_DEPT = "D006"
+
 MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
+
+
+def _filter_budget_query(query):
+    """过滤掉非行政部的办公用品预算"""
+    return query.filter(
+        ~(DepartmentBudget.expense_type == "办公用品") | (DepartmentBudget.department_id == OFFICE_SUPPLIES_DEPT)
+    )
 
 
 @router.get("/all")
@@ -24,9 +34,11 @@ def get_all_budgets(user: dict = Depends(get_current_user)):
 
         if role in ("manager", "director"):
             # 经理/总监：返回本部门各类别预算
-            budgets = db.query(DepartmentBudget).filter_by(
-                department_id=dept_id
-            ).order_by(DepartmentBudget.expense_type).all()
+            query = db.query(DepartmentBudget).filter_by(department_id=dept_id)
+            # 非行政部过滤掉办公用品
+            if dept_id != OFFICE_SUPPLIES_DEPT:
+                query = query.filter(DepartmentBudget.expense_type != "办公用品")
+            budgets = query.order_by(DepartmentBudget.expense_type).all()
 
             result = []
             for b in budgets:
@@ -50,8 +62,10 @@ def get_all_budgets(user: dict = Depends(get_current_user)):
             return {"categories": result, "role": role, "department_id": dept_id, "department_name": budgets[0].department_name if budgets else ""}
 
         else:
-            # 总经理/admin：返回各部门总预算
-            departments = db.query(DepartmentBudget).order_by(
+            # 总经理/admin：返回各部门总预算（过滤非行政部的办公用品）
+            departments = _filter_budget_query(
+                db.query(DepartmentBudget)
+            ).order_by(
                 DepartmentBudget.department_id, DepartmentBudget.expense_type
             ).all()
 
@@ -103,7 +117,10 @@ def get_budget_summary(user: dict = Depends(get_current_user)):
 
         if role in ("manager", "director"):
             # 经理/总监：本部门各类别汇总
-            budgets = db.query(DepartmentBudget).filter_by(department_id=dept_id).all()
+            query = db.query(DepartmentBudget).filter_by(department_id=dept_id)
+            if dept_id != OFFICE_SUPPLIES_DEPT:
+                query = query.filter(DepartmentBudget.expense_type != "办公用品")
+            budgets = query.all()
             total_budget = sum(b.budget_amount for b in budgets)
             total_spent = 0.0
             for b in budgets:
@@ -124,8 +141,8 @@ def get_budget_summary(user: dict = Depends(get_current_user)):
             }
 
         else:
-            # 总经理/admin：全公司汇总
-            budgets = db.query(DepartmentBudget).all()
+            # 总经理/admin：全公司汇总（过滤非行政部的办公用品）
+            budgets = _filter_budget_query(db.query(DepartmentBudget)).all()
             total_budget = sum(b.budget_amount for b in budgets)
             total_spent = 0.0
             dept_ids = set()
@@ -179,14 +196,17 @@ def get_budget_charts(user: dict = Depends(get_current_user)):
                 if 0 <= idx < 12:
                     monthly[idx] = round(float(m.total), 2)
 
-            # 类别饼图：本部门各类别报销占比
-            category_data = db.query(
+            # 类别饼图：本部门各类别报销占比（非行政部过滤办公用品）
+            cat_query = db.query(
                 Reimbursements.expense_type,
                 func.sum(Reimbursements.total_amount).label('total')
             ).filter(
                 Reimbursements.department_id == dept_id,
                 Reimbursements.status == "approved"
-            ).group_by(Reimbursements.expense_type).all()
+            )
+            if dept_id != OFFICE_SUPPLIES_DEPT:
+                cat_query = cat_query.filter(Reimbursements.expense_type != "办公用品")
+            category_data = cat_query.group_by(Reimbursements.expense_type).all()
 
             categories = []
             for c in category_data:
@@ -222,13 +242,16 @@ def get_budget_charts(user: dict = Depends(get_current_user)):
                 if 0 <= idx < 12:
                     monthly[idx] = round(float(m.total), 2)
 
-            # 类别饼图：所有部门各类别报销占比
-            category_data = db.query(
+            # 类别饼图：全公司各类别报销占比（过滤非行政部的办公用品）
+            cat_query = db.query(
                 Reimbursements.expense_type,
                 func.sum(Reimbursements.total_amount).label('total')
             ).filter(
                 Reimbursements.status == "approved"
-            ).group_by(Reimbursements.expense_type).all()
+            ).filter(
+                ~(Reimbursements.expense_type == "办公用品") | (Reimbursements.department_id == OFFICE_SUPPLIES_DEPT)
+            )
+            category_data = cat_query.group_by(Reimbursements.expense_type).all()
 
             categories = []
             for c in category_data:

@@ -4,7 +4,14 @@
 
 {% block content %}
 <div class="p-margin-desktop">
-    <div class="max-w-6xl mx-auto space-y-xl">
+    <!-- No Permission Message -->
+    <div id="no-permission" class="hidden glass-card p-xl rounded-xl text-center max-w-2xl mx-auto">
+        <span class="material-symbols-outlined text-[48px] text-on-surface-variant mb-md block">lock</span>
+        <h3 class="font-headline-md text-headline-md text-on-surface-variant mb-sm">无访问权限</h3>
+        <p class="font-body-md text-on-surface-variant">普通员工无法访问审批中心，如需了解请咨询部门经理。</p>
+    </div>
+
+    <div class="max-w-6xl mx-auto space-y-xl" id="approval-content">
         <!-- Page Header -->
         <div class="flex justify-between items-end">
             <div>
@@ -182,6 +189,12 @@ function exportSummary() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const user = getCurrentUser();
+    if (user && user.role === 'employee') {
+        document.getElementById('approval-content').classList.add('hidden');
+        document.getElementById('no-permission').classList.remove('hidden');
+        return;
+    }
     loadPendingApprovals();
     loadHistory();
 });
