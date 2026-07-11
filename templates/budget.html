@@ -280,7 +280,9 @@ async function loadBudgets() {
             // 渲染类别行
             const tbody = document.getElementById('budget-table-body');
             tbody.innerHTML = '';
-            const categories = data.categories || [];
+            const categories = (data.categories || []).filter(c =>
+                !(c.expense_type === '办公用品' && c.department_id !== 'D006')
+            );
             categories.forEach(cat => {
                 const usedPct = cat.usage_rate;
                 const remainingPct = 100 - usedPct;

@@ -7,6 +7,9 @@ from datetime import datetime
 # 五大费用类型
 EXPENSE_TYPES = ["差旅费", "业务招待费", "日常交通费", "办公用品", "其他费用"]
 
+# 只有行政部(D006)才有办公用品预算
+OFFICE_SUPPLIES_DEPT = "D006"
+
 
 @tool("查询部门预算")
 def query_department_budget(department_id: str, expense_type: str = "") -> str:
@@ -19,13 +22,20 @@ def query_department_budget(department_id: str, expense_type: str = "") -> str:
     db = SessionLocal()
     try:
         if expense_type:
+            # 如果查询办公用品但不是行政部，直接返回无预算
+            if expense_type == "办公用品" and department_id != OFFICE_SUPPLIES_DEPT:
+                return f"部门 {department_id} 没有办公用品预算，办公用品预算仅限行政部（D006）"
             budgets = db.query(DepartmentBudget).filter_by(
                 department_id=department_id, expense_type=expense_type
             ).all()
         else:
-            budgets = db.query(DepartmentBudget).filter_by(
+            query = db.query(DepartmentBudget).filter_by(
                 department_id=department_id
-            ).order_by(DepartmentBudget.expense_type).all()
+            )
+            # 非行政部过滤办公用品
+            if department_id != OFFICE_SUPPLIES_DEPT:
+                query = query.filter(DepartmentBudget.expense_type != "办公用品")
+            budgets = query.order_by(DepartmentBudget.expense_type).all()
 
         if not budgets:
             return f"未找到部门ID为 {department_id} 的预算信息"
@@ -70,6 +80,9 @@ def check_budget_sufficient(department_id: str, amount: float, expense_type: str
     db = SessionLocal()
     try:
         if expense_type:
+            # 如果查询办公用品但不是行政部，直接返回无预算
+            if expense_type == "办公用品" and department_id != OFFICE_SUPPLIES_DEPT:
+                return f"部门 {department_id} 没有办公用品预算，办公用品预算仅限行政部（D006）。请选择其他费用类别。"
             budget = db.query(DepartmentBudget).filter_by(
                 department_id=department_id, expense_type=expense_type
             ).first()
@@ -88,8 +101,11 @@ def check_budget_sufficient(department_id: str, amount: float, expense_type: str
             else:
                 return f"预算不足！{budget.department_name}【{expense_type}】剩余预算 {remaining:,.2f} 元，报销金额 {amount:,.2f} 元超出预算 {amount - remaining:,.2f} 元，需要特殊审批。"
         else:
-            # 无类别时查总预算
-            budgets = db.query(DepartmentBudget).filter_by(department_id=department_id).all()
+            # 无类别时查总预算（过滤非行政部的办公用品）
+            query = db.query(DepartmentBudget).filter_by(department_id=department_id)
+            if department_id != OFFICE_SUPPLIES_DEPT:
+                query = query.filter(DepartmentBudget.expense_type != "办公用品")
+            budgets = query.all()
             if not budgets:
                 return f"未找到部门ID为 {department_id} 的预算信息"
             total_budget = sum(b.budget_amount for b in budgets)
@@ -114,7 +130,10 @@ def get_all_department_budgets() -> str:
     """
     db = SessionLocal()
     try:
-        departments = db.query(DepartmentBudget).order_by(
+        # 过滤非行政部的办公用品
+        departments = db.query(DepartmentBudget).filter(
+            ~(DepartmentBudget.expense_type == "办公用品") | (DepartmentBudget.department_id == OFFICE_SUPPLIES_DEPT)
+        ).order_by(
             DepartmentBudget.department_id, DepartmentBudget.expense_type
         ).all()
 

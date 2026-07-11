@@ -21,6 +21,9 @@ def get_pending_approvals(
     start_date: str = None,
     end_date: str = None,
 ):
+    if user.get("role") == "employee":
+        raise HTTPException(status_code=403, detail="普通员工无权访问审批中心")
+
     db = SessionLocal()
     try:
         # 查询该审批人的所有待审批记录
@@ -88,6 +91,9 @@ def get_pending_approvals(
 
 @router.post("/action")
 def do_approval(action: ApprovalAction, user: dict = Depends(get_current_user)):
+    if user.get("role") == "employee":
+        raise HTTPException(status_code=403, detail="普通员工无权执行审批操作")
+
     from src.tools.approval_tool import approve_or_reject_reimbursement
 
     result = approve_or_reject_reimbursement.func(
@@ -107,6 +113,9 @@ def get_approval_history(
     page: int = 1,
     page_size: int = 20,
 ):
+    if user.get("role") == "employee":
+        raise HTTPException(status_code=403, detail="普通员工无权查看审批历史")
+
     db = SessionLocal()
     try:
         # 管理员和经理可以看到所有已处理的审批，普通用户只能看与自己相关的

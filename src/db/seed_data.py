@@ -13,21 +13,21 @@ def seed_department_budget(db: Session):
     """每个部门每个费用类别一行预算"""
     departments = [
         {"department_id": "D001", "department_name": "技术部",
-         "budgets": {"差旅费": 150000, "业务招待费": 80000, "日常交通费": 50000, "办公用品": 120000, "其他费用": 100000}},
+         "budgets": {"差旅费": 150000, "业务招待费": 80000, "日常交通费": 50000, "其他费用": 100000}},
         {"department_id": "D002", "department_name": "市场部",
-         "budgets": {"差旅费": 80000, "业务招待费": 100000, "日常交通费": 40000, "办公用品": 30000, "其他费用": 50000}},
+         "budgets": {"差旅费": 80000, "业务招待费": 100000, "日常交通费": 40000, "其他费用": 50000}},
         {"department_id": "D003", "department_name": "财务部",
-         "budgets": {"差旅费": 20000, "业务招待费": 15000, "日常交通费": 20000, "办公用品": 25000, "其他费用": 20000}},
+         "budgets": {"差旅费": 20000, "业务招待费": 15000, "日常交通费": 20000, "其他费用": 20000}},
         {"department_id": "D004", "department_name": "人力资源部",
-         "budgets": {"差旅费": 15000, "业务招待费": 20000, "日常交通费": 15000, "办公用品": 15000, "其他费用": 15000}},
+         "budgets": {"差旅费": 15000, "业务招待费": 20000, "日常交通费": 15000, "其他费用": 15000}},
         {"department_id": "D005", "department_name": "销售部",
-         "budgets": {"差旅费": 250000, "业务招待费": 300000, "日常交通费": 100000, "办公用品": 50000, "其他费用": 100000}},
+         "budgets": {"差旅费": 250000, "业务招待费": 300000, "日常交通费": 100000, "其他费用": 100000}},
         {"department_id": "D006", "department_name": "行政部",
          "budgets": {"差旅费": 20000, "业务招待费": 30000, "日常交通费": 30000, "办公用品": 80000, "其他费用": 40000}},
     ]
 
     for dept in departments:
-        for etype in EXPENSE_TYPES:
+        for etype in dept["budgets"].keys():
             existing = db.query(DepartmentBudget).filter_by(
                 department_id=dept["department_id"], expense_type=etype
             ).first()
@@ -169,7 +169,7 @@ _SEED_DATA = [
     {"month": 2, "emp": ("E001", "张三", "D001"), "etype": "日常交通费", "amount": 86.50,
      "desc": "拜访客户，公司→南金集团", "sub": "市内公务交通",
      "voucher": True, "payee": "花小猪科技发展有限公司"},
-    {"month": 2, "emp": ("E003", "王五", "D003"), "etype": "办公用品", "amount": 320.00,
+    {"month": 2, "emp": ("E003", "王五", "D003"), "etype": "其他费用", "amount": 320.00,
      "desc": "打印纸、墨盒采购", "sub": "办公用品",
      "inv_code": "264420000201", "inv_num": "10002001", "seller": "济南办公用品有限公司", "inv_type": "增值税发票"},
     {"month": 2, "emp": ("E006", "周芳", "D006"), "etype": "办公用品", "amount": 1580.00,
