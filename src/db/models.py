@@ -115,13 +115,19 @@ class DepartmentBudget(Base):
     __tablename__ = 'department_budget'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    department_id = Column(String(32), unique=True, nullable=False)
+    department_id = Column(String(32), nullable=False)
     department_name = Column(String(100), nullable=False)
+    expense_type = Column(String(50), nullable=False)  # 预算类别，与报销单expense_type一一对应
     budget_amount = Column(Float, nullable=False)
     spent_amount = Column(Float, default=0.0)
     remaining_amount = Column(Float)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        # 每个部门的每个类别只有一行预算
+        {'sqlite_autoincrement': True},
+    )
 
     reimbursements = relationship('Reimbursements', back_populates='department')
 
