@@ -40,6 +40,60 @@ def _determine_sub_expense_type(invoice):
     return ""
 
 
+def _determine_voucher_sub_expense_type(voucher):
+    """根据凭证类型和收款方名称推断费用小分类"""
+    if voucher.sub_expense_type:
+        return voucher.sub_expense_type
+
+    payee = voucher.payee or ""
+    payee_lower = payee.lower()
+    if any(kw in payee_lower for kw in ["酒店", "宾馆", "旅馆", "公寓", "民宿", "希尔顿", "如家", "汉庭", "全季", "锦江", "万豪", "洲际", "香格里拉"]):
+        return "住宿"
+    if any(kw in payee_lower for kw in ["餐饮", "饭店", "餐厅", "酒楼", "食府", "美食", "茶楼", "咖啡", "肯德基", "麦当劳", "星巴克", "火锅", "烧烤"]):
+        return "餐饮"
+    if any(kw in payee_lower for kw in ["航空", "机票", "铁路", "12306", "出租", "网约车", "滴滴", "神州", "花小猪", "高德", "打车", "曹操", "T3出行", "美团打车", "哈啰"]):
+        return "出差交通"
+    if any(kw in payee_lower for kw in ["办公用品", "文具", "打印", "复印", "办公设备"]):
+        return "办公用品"
+    if any(kw in payee_lower for kw in ["快递", "物流", "顺丰", "中通", "圆通", "韵达", "申通"]):
+        return "快递"
+    if any(kw in payee_lower for kw in ["停车", "高速", "路桥"]):
+        return "停车费"
+
+    return ""
+
+
+def _check_timeliness(date_str: str):
+    """通用90天时效性校验，合规返回None，不合规返回原因字符串"""
+    if not date_str:
+        return "缺少日期，无法进行时效性校验"
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        days_diff = (datetime.now() - dt).days
+        if days_diff > 90:
+            return f"超过90天有效期（日期：{date_str}）"
+    except ValueError:
+        try:
+            dt = datetime.strptime(date_str, "%Y年%m月%d日")
+            days_diff = (datetime.now() - dt).days
+            if days_diff > 90:
+                return f"超过90天有效期（日期：{date_str}）"
+        except ValueError:
+            return "日期格式不正确"
+    return None
+
+
+class _VoucherAsInvoice:
+    """将 Voucher 适配为类 Invoice 接口，以复用 _check_expense_amount 等检查逻辑"""
+    def __init__(self, voucher):
+        self.amount = voucher.amount
+        self.invoice_date = voucher.payment_date
+        self.seller_name = voucher.payee
+        self.invoice_type_name = voucher.voucher_type
+        self.description = voucher.description
+        self.sub_expense_type = voucher.sub_expense_type
+
+
 # ==================== 城市等级映射 ====================
 CITY_TIERS = {
     # 一线城市
@@ -192,29 +246,19 @@ def compliance_check(expense_type: str, invoice_ids: str, employee_id: str = "")
             if not invoice.sub_expense_type:
                 invoice.sub_expense_type = _determine_sub_expense_type(invoice) or None
 
-            invalid_reason = None
+            invalid_reasons = []
 
             # 1) 90天时效性校验
-            if not invoice.invoice_date:
-                invalid_reason = "缺少开票日期，无法进行时效性校验"
-            else:
-                try:
-                    invoice_dt = datetime.strptime(invoice.invoice_date, "%Y-%m-%d")
-                    days_diff = (datetime.now() - invoice_dt).days
-                    if days_diff > 90:
-                        invalid_reason = f"超过90天有效期（发票日期：{invoice.invoice_date}）"
-                except ValueError:
-                    try:
-                        invoice_dt = datetime.strptime(invoice.invoice_date, "%Y年%m月%d日")
-                        days_diff = (datetime.now() - invoice_dt).days
-                        if days_diff > 90:
-                            invalid_reason = f"超过90天有效期（发票日期：{invoice.invoice_date}）"
-                    except ValueError:
-                        invalid_reason = "发票日期格式不正确"
+            timeliness_reason = _check_timeliness(invoice.invoice_date)
+            if timeliness_reason:
+                invalid_reasons.append(timeliness_reason)
 
             # 2) 按费用类型进行金额合规检查
-            if not invalid_reason:
-                invalid_reason = _check_expense_amount(expense_type, invoice, user_role, employee_id, db)
+            amount_reason = _check_expense_amount(expense_type, invoice, user_role, employee_id, db)
+            if amount_reason:
+                invalid_reasons.append(amount_reason)
+
+            invalid_reason = "；".join(invalid_reasons) if invalid_reasons else None
 
             if invalid_reason:
                 invoice.is_valid = False
@@ -346,7 +390,23 @@ def _check_entertainment_expense(invoice, sub_type, user_role, db):
         if invoice.amount > ENTERTAINMENT_LIMITS["single_total_threshold"]:
             # 不直接判不合规，只提示需总监审批
             return None
-        # 人均标准难以从单张发票自动判断，跳过自动判不合规
+        # 从描述中提取用餐人数，判断人均标准
+        desc = invoice.description or ""
+        import re
+        match = re.search(r'(\d+)\s*人', desc)
+        if match:
+            person_count = int(match.group(1))
+            if person_count > 0:
+                per_capita = invoice.amount / person_count
+                if person_count == 1:
+                    limit = ENTERTAINMENT_LIMITS["single_person_per_capita"]
+                    if per_capita > limit:
+                        return f"单人招待人均上限 {limit}元，实际人均 {per_capita:,.2f}元（{invoice.amount:,.2f}元/1人）"
+                else:
+                    limit = ENTERTAINMENT_LIMITS["multi_person_per_capita"]
+                    if per_capita > limit:
+                        return f"多人聚餐人均上限 {limit}元，实际人均 {per_capita:,.2f}元（{invoice.amount:,.2f}元/{person_count}人）"
+        # 描述中未提取到人数，跳过人均检查
         return None
 
     elif sub_type == "礼品":
@@ -406,6 +466,112 @@ def _extract_city_from_name(name):
         if city in name:
             return city
     return None
+
+
+@tool("凭证合规审查")
+def voucher_compliance_check(expense_type: str, voucher_ids: str, employee_id: str = "") -> str:
+    """
+    检查多张凭证是否符合公司报销政策（含90天时效性校验和金额合规检查）
+    :param expense_type: 费用类型（大分类），如 差旅费、业务招待费、日常交通费、办公用品、其他费用
+    :param voucher_ids: 凭证ID列表，用逗号分隔，如 "1,2,3"
+    :param employee_id: 申请人员工ID，如 E001（用于判断职级和部门，影响合规标准）
+    :return: 合规审查结果字符串
+    """
+    if expense_type not in VALID_EXPENSE_TYPES:
+        return f"未知费用类型：{expense_type}，请选择以下类型之一：{', '.join(VALID_EXPENSE_TYPES)}"
+
+    if not voucher_ids.strip():
+        return "错误：凭证ID列表不能为空"
+
+    user_role = _get_user_role(employee_id) if employee_id else "employee"
+
+    # 办公用品特殊校验：仅行政部员工可报销
+    if expense_type == "办公用品":
+        db_check = SessionLocal()
+        try:
+            user = db_check.query(User).filter_by(user_id=employee_id).first()
+            if user and user.department_id != "D006":
+                return (
+                    f"合规审查结果：不予通过\n"
+                    f"原因：办公用品仅限行政部员工集中采购报销，"
+                    f"您所在部门为 {user.department_id}，无权报销办公用品。"
+                )
+        finally:
+            db_check.close()
+
+    db = SessionLocal()
+    try:
+        id_list = [int(x.strip()) for x in voucher_ids.split(",") if x.strip()]
+
+        invalid_vouchers = []
+        valid_vouchers = []
+
+        for vid in id_list:
+            voucher = db.query(Voucher).filter_by(id=vid).first()
+            if not voucher:
+                invalid_vouchers.append({
+                    "id": vid,
+                    "reason": "凭证记录不存在",
+                    "date": ""
+                })
+                continue
+
+            # 自动推断小分类
+            if not voucher.sub_expense_type:
+                voucher.sub_expense_type = _determine_voucher_sub_expense_type(voucher) or None
+
+            invalid_reasons = []
+
+            # 1) 90天时效性校验
+            timeliness_reason = _check_timeliness(voucher.payment_date)
+            if timeliness_reason:
+                invalid_reasons.append(timeliness_reason)
+
+            # 2) 按费用类型进行金额合规检查
+            adapter = _VoucherAsInvoice(voucher)
+            amount_reason = _check_expense_amount(expense_type, adapter, user_role, employee_id, db)
+            if amount_reason:
+                invalid_reasons.append(amount_reason)
+
+            invalid_reason = "；".join(invalid_reasons) if invalid_reasons else None
+
+            if invalid_reason:
+                voucher.is_valid = False
+                voucher.invalid_reason = invalid_reason
+                invalid_vouchers.append({
+                    "id": vid,
+                    "reason": invalid_reason,
+                    "date": voucher.payment_date
+                })
+            else:
+                voucher.is_valid = True
+                voucher.invalid_reason = None
+                valid_vouchers.append(voucher)
+
+        db.commit()
+
+        valid_total = sum(v.amount for v in valid_vouchers)
+
+        result = f"凭证合规审查完成。\n"
+        result += f"费用类型：{expense_type} | 申请人职级：{_role_display(user_role)}\n"
+        result += f"合规凭证：{len(valid_vouchers)} 张，合计金额 {valid_total:,.2f} 元\n"
+
+        if invalid_vouchers:
+            result += f"不合规凭证：{len(invalid_vouchers)} 张\n"
+            for v in invalid_vouchers:
+                result += f"  - 凭证 ID {v['id']}：{v['reason']}\n"
+
+        result += f"本次可报销金额：{valid_total:,.2f} 元"
+
+        return result
+
+    except ValueError:
+        return "错误：凭证ID列表格式不正确，请确保为数字，用逗号分隔"
+    except Exception as e:
+        db.rollback()
+        return f"凭证合规审查失败：{str(e)}"
+    finally:
+        db.close()
 
 
 @tool("更新发票描述")

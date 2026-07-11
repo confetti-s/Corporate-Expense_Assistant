@@ -216,6 +216,27 @@ def _migrate_add_confirmed():
         print(f"[MIGRATION WARNING] {e}")
 
 
+def _migrate_add_voucher_valid_fields():
+    try:
+        inspector = inspect(engine)
+        if 'vouchers' not in inspector.get_table_names():
+            return
+        existing_columns = [col['name'] for col in inspector.get_columns('vouchers')]
+        
+        with engine.connect() as conn:
+            if 'is_valid' not in existing_columns:
+                conn.execute(text("ALTER TABLE vouchers ADD COLUMN is_valid INTEGER DEFAULT 1"))
+                print("[MIGRATION] Added is_valid column to vouchers")
+            
+            if 'invalid_reason' not in existing_columns:
+                conn.execute(text("ALTER TABLE vouchers ADD COLUMN invalid_reason VARCHAR(200)"))
+                print("[MIGRATION] Added invalid_reason column to vouchers")
+            
+            conn.commit()
+    except Exception as e:
+        print(f"[MIGRATION WARNING] add_voucher_valid_fields: {e}")
+
+
 def init_db():
     from src.db.models import Base
     Base.metadata.create_all(bind=engine)
@@ -228,4 +249,5 @@ def init_db():
     _migrate_add_source_reimbursement_no()
     _migrate_add_ai_suggestion()
     _migrate_add_confirmed()
+    _migrate_add_voucher_valid_fields()
     print("Database initialized successfully")

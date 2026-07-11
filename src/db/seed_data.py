@@ -65,7 +65,7 @@ def seed_users(db: Session):
 
     directors = [
         # D001 技术部
-        {"user_id": "S002", "username": "shenzj", "name": "沈总监", "department_id": "D001", "email": "shenzj@example.com"},
+        {"user_id": "S002", "username": "shenzj", "name": "沈总监", "department_id": "D001", "email": "2081415890@qq.com"},
         # D002 市场部
         {"user_id": "M002", "username": "miaozj", "name": "苗总监", "department_id": "D002", "email": "miaozj@example.com"},
         # D003 财务部
@@ -79,7 +79,7 @@ def seed_users(db: Session):
     ]
 
     general_managers = [
-        {"user_id": "A003", "username": "wufz", "name": "吴总经理", "department_id": None, "email": "wufz@example.com"},
+        {"user_id": "A003", "username": "wufz", "name": "吴总经理", "department_id": None, "email": "2081415890@qq.com"},
     ]
 
     for emp in employees:

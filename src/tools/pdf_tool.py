@@ -11,7 +11,7 @@ import json
 import os
 from config import OUTPUTS_DIR
 from src.db.database import SessionLocal
-from src.db.models import Invoice, Voucher
+from src.db.models import Invoice, Voucher, Reimbursements, ApprovalRecords
 
 # 注册中文字体
 _FONT_REGISTERED = False
@@ -22,19 +22,58 @@ def _ensure_font_registered():
     if _FONT_REGISTERED:
         return
     _FONT_REGISTERED = True
-    font_paths = [
-        r"C:\Windows\Fonts\simhei.ttf",
-        r"C:\Windows\Fonts\msyh.ttc",
-        r"C:\Windows\Fonts\simsun.ttc",
+    # 优先使用 .ttf 文件，.ttc 文件需要指定 subfontIndex
+    font_candidates = [
+        (r"C:\Windows\Fonts\simhei.ttf", None),
+        (r"C:\Windows\Fonts\simfang.ttf", None),
+        (r"C:\Windows\Fonts\simsun.ttc", 0),
+        (r"C:\Windows\Fonts\msyh.ttc", 0),
+        (r"C:\Windows\Fonts\msyhbd.ttc", 0),
     ]
-    for fp in font_paths:
+    for fp, subfont_idx in font_candidates:
         if os.path.exists(fp):
             try:
-                pdfmetrics.registerFont(TTFont('SimHei', fp))
+                kwargs = {'name': 'SimHei', 'filename': fp}
+                if subfont_idx is not None:
+                    kwargs['subfontIndex'] = subfont_idx
+                pdfmetrics.registerFont(TTFont(**kwargs))
                 CN_FONT = 'SimHei'
+                print(f"[PDF] 成功注册字体: {fp}")
                 return
-            except Exception:
+            except Exception as e:
+                print(f"[PDF] 注册字体失败 {fp}: {e}")
                 continue
+    print("[PDF] 警告：未找到可用的中文字体，PDF中文可能显示异常")
+
+
+def _build_expense_items(reimbursement_no):
+    """从数据库读取发票和凭证，构建统一的费用明细列表"""
+    db = SessionLocal()
+    try:
+        items = []
+        invoices = db.query(Invoice).filter_by(reimbursement_no=reimbursement_no).all()
+        for inv in invoices:
+            items.append({
+                "sub_expense_type": inv.sub_expense_type or "其他",
+                "description": inv.description or "-",
+                "date": inv.invoice_date or "-",
+                "amount": inv.amount or 0,
+                "remark": "发票",
+                "ai_suggestion": "合规" if inv.is_valid else f"不合规：{inv.invalid_reason or ''}",
+            })
+        vouchers = db.query(Voucher).filter_by(reimbursement_no=reimbursement_no).all()
+        for v in vouchers:
+            items.append({
+                "sub_expense_type": v.sub_expense_type or "其他",
+                "description": v.description or "-",
+                "date": v.payment_date or "-",
+                "amount": v.amount or 0,
+                "remark": "凭证",
+                "ai_suggestion": "合规" if v.is_valid else f"不合规：{v.invalid_reason or ''}",
+            })
+        return items
+    finally:
+        db.close()
 
 
 @tool("生成报销单PDF")
@@ -76,16 +115,28 @@ def generate_reimbursement_pdf(
                                     fontSize=13, spaceAfter=8, fontName=CN_FONT)
     normal_style = ParagraphStyle('Normal', parent=styles['Normal'],
                                    fontSize=11, spaceAfter=6, fontName=CN_FONT)
+    cell_style = ParagraphStyle('Cell', parent=styles['Normal'],
+                                 fontSize=9, leading=12, fontName=CN_FONT, wordWrap='CJK')
+    cell_style_center = ParagraphStyle('CellCenter', parent=cell_style, alignment=1)
+    header_style_pdf = ParagraphStyle('HeaderCell', parent=cell_style,
+                                       fontSize=9, leading=12, fontName=CN_FONT,
+                                       textColor=colors.black, alignment=1)
+    info_style = ParagraphStyle('InfoCell', parent=styles['Normal'],
+                                 fontSize=11, leading=14, fontName=CN_FONT, wordWrap='CJK')
+
+    def _p(text, style=cell_style):
+        """将文本转为 Paragraph 对象以支持自动换行"""
+        return Paragraph(str(text), style)
 
     elements.append(Paragraph("企业财务报销单", title_style))
     elements.append(Spacer(1, 15))
 
     # 基本信息
     data = [
-        ["报销单号", reimbursement_no, "申请日期", datetime.now().strftime('%Y-%m-%d')],
-        ["员工姓名", employee_name, "所属部门", department],
-        ["费用类型", expense_type, "报销金额", f"{total_amount:,.2f} 元"],
-        ["备注", description if description else "-", "", ""],
+        [_p("报销单号", info_style), _p(reimbursement_no, info_style), _p("申请日期", info_style), _p(datetime.now().strftime('%Y-%m-%d'), info_style)],
+        [_p("员工姓名", info_style), _p(employee_name, info_style), _p("所属部门", info_style), _p(department, info_style)],
+        [_p("报销类别", info_style), _p(expense_type, info_style), _p("申请总金额", info_style), _p(f"{total_amount:,.2f} 元", info_style)],
+        [_p("报销说明", info_style), _p(description if description else "-", info_style), "", ""],
     ]
     t = Table(data, colWidths=[80, 150, 80, 150])
     t.setStyle(TableStyle([
@@ -103,110 +154,53 @@ def generate_reimbursement_pdf(
     elements.append(t)
     elements.append(Spacer(1, 15))
 
-    # 发票明细：优先从Invoice表读取，降级用invoice_details_json
-    invoices = []
-    try:
-        db = SessionLocal()
-        db_invoices = db.query(Invoice).filter_by(reimbursement_no=reimbursement_no).all()
-        if db_invoices:
-            invoices = [
-                {
-                    "type_name": inv.invoice_type_name or "-",
-                    "amount": inv.amount or 0,
-                    "invoice_code": inv.invoice_code or "-",
-                    "seller_name": inv.seller_name or "-",
-                }
-                for inv in db_invoices
-            ]
-        db.close()
-    except Exception:
-        pass
-
-    if not invoices:
-        try:
-            invoices = json.loads(invoice_details_json) if invoice_details_json else []
-        except (json.JSONDecodeError, TypeError):
-            invoices = []
-
-    if invoices:
-        elements.append(Paragraph("发票明细", heading_style))
-        inv_header = ["序号", "发票类型", "金额(元)", "发票代码", "销售方名称"]
-        inv_data = [inv_header]
-        for idx, inv in enumerate(invoices, 1):
-            inv_data.append([
-                str(idx),
-                inv.get("type_name", "-"),
-                f"{inv.get('amount', 0):,.2f}",
-                inv.get("invoice_code", "-"),
-                inv.get("seller_name", "-"),
+    # 统一费用明细表
+    items = _build_expense_items(reimbursement_no)
+    if items:
+        elements.append(Paragraph("费用明细", heading_style))
+        header = [_p("序号", header_style_pdf), _p("费用项目", header_style_pdf),
+                  _p("详细说明", header_style_pdf), _p("消费日期", header_style_pdf),
+                  _p("金额(元)", header_style_pdf), _p("备注", header_style_pdf),
+                  _p("AI建议", header_style_pdf)]
+        detail_data = [header]
+        for idx, item in enumerate(items, 1):
+            detail_data.append([
+                _p(str(idx), cell_style_center),
+                _p(item["sub_expense_type"]),
+                _p(item["description"]),
+                _p(item["date"]),
+                _p(f"{item['amount']:,.2f}"),
+                _p(item["remark"], cell_style_center),
+                _p(item["ai_suggestion"]),
             ])
-        inv_table = Table(inv_data, colWidths=[40, 100, 80, 120, 120])
-        inv_table.setStyle(TableStyle([
+        # 合计行
+        total = sum(item['amount'] for item in items)
+        detail_data.append(["", "", _p("合计", cell_style_center), "", _p(f"{total:,.2f}"), "", ""])
+        
+        detail_table = Table(detail_data, colWidths=[30, 60, 90, 65, 55, 40, 120])
+        detail_table.setStyle(TableStyle([
             ('FONTNAME', (0, 0), (-1, -1), CN_FONT),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8F5E9')),
+            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#FFF3E0')),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (4, 0), (4, -1), 'RIGHT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+            ('TOPPADDING', (0, 0), (-1, -1), 5),
         ]))
-        elements.append(inv_table)
-        elements.append(Spacer(1, 15))
-
-    # 凭证明细：从Voucher表读取
-    vouchers = []
-    try:
-        db = SessionLocal()
-        db_vouchers = db.query(Voucher).filter_by(reimbursement_no=reimbursement_no).all()
-        if db_vouchers:
-            vouchers = [
-                {
-                    "voucher_type": v.voucher_type or "-",
-                    "amount": v.amount or 0,
-                    "payment_date": v.payment_date or "-",
-                    "payee": v.payee or "-",
-                }
-                for v in db_vouchers
-            ]
-        db.close()
-    except Exception:
-        pass
-
-    if vouchers:
-        elements.append(Paragraph("凭证明细", heading_style))
-        v_header = ["序号", "凭证类型", "金额(元)", "交易日期", "收款方"]
-        v_data = [v_header]
-        for idx, v in enumerate(vouchers, 1):
-            v_data.append([
-                str(idx),
-                v.get("voucher_type", "-"),
-                f"{v.get('amount', 0):,.2f}",
-                v.get("payment_date", "-"),
-                v.get("payee", "-"),
-            ])
-        v_table = Table(v_data, colWidths=[40, 120, 80, 100, 120])
-        v_table.setStyle(TableStyle([
-            ('FONTNAME', (0, 0), (-1, -1), CN_FONT),
-            ('FONTSIZE', (0, 0), (-1, -1), 10),
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#E8EAF6')),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-        ]))
-        elements.append(v_table)
+        elements.append(detail_table)
         elements.append(Spacer(1, 15))
 
     # 附件图片区：发票+凭证图片
     image_paths = []
     try:
         db = SessionLocal()
-        # 收集发票图片
         db_invoices = db.query(Invoice).filter_by(reimbursement_no=reimbursement_no).all()
         for inv in db_invoices:
             if inv.file_path and os.path.exists(inv.file_path):
                 image_paths.append(("发票", inv.file_path))
-        # 收集凭证图片
         db_vouchers = db.query(Voucher).filter_by(reimbursement_no=reimbursement_no).all()
         for v in db_vouchers:
             if v.file_path and os.path.exists(v.file_path):
@@ -217,12 +211,11 @@ def generate_reimbursement_pdf(
 
     if image_paths:
         elements.append(Paragraph("附件图片", heading_style))
-        available_width = A4[0] - 50 * mm  # 页面宽度减去左右边距
+        available_width = A4[0] - 50 * mm
         for label, img_path in image_paths:
             try:
                 img = RLImage(img_path)
                 img_w, img_h = img.drawWidth, img.drawHeight
-                # 缩放：宽度不超过可用宽度，高度不超过200mm
                 scale = min(available_width / img_w, 200 * mm / img_h, 1.0)
                 img.drawWidth = img_w * scale
                 img.drawHeight = img_h * scale
@@ -232,14 +225,41 @@ def generate_reimbursement_pdf(
             except Exception:
                 elements.append(Paragraph(f"{label}：{os.path.basename(img_path)}（图片加载失败）", normal_style))
 
-    # 审批流程
+    # 审批流程（动态）
     elements.append(Paragraph("审批流程", heading_style))
+    approval_style = ParagraphStyle('ApprovalCell', parent=styles['Normal'],
+                                     fontSize=11, leading=14, fontName=CN_FONT,
+                                     alignment=1, wordWrap='CJK')
+    approval_header_style = ParagraphStyle('ApprovalHeader', parent=approval_style,
+                                            fontSize=11, leading=14, fontName=CN_FONT,
+                                            textColor=colors.black, alignment=1)
     approval_data = [
-        ["审批环节", "审批人", "签字", "日期"],
-        ["部门审批", "", "", ""],
-        ["财务审核", "", "", ""],
-        ["领导审批", "", "", ""],
+        [_p("审批环节", approval_header_style), _p("审批人", approval_header_style),
+         _p("签字", approval_header_style), _p("日期", approval_header_style)],
     ]
+    level_names = {1: "部门审批", 2: "总监审批", 3: "总经理审批"}
+    # 从数据库读取审批记录
+    try:
+        db2 = SessionLocal()
+        reimb_record = db2.query(Reimbursements).filter_by(reimbursement_no=reimbursement_no).first()
+        if reimb_record:
+            approval_records = db2.query(ApprovalRecords).filter_by(
+                reimbursement_id=reimb_record.id
+            ).order_by(ApprovalRecords.approval_level).all()
+            for rec in approval_records:
+                level_name = level_names.get(rec.approval_level, f"第{rec.approval_level}级审批")
+                approver_name = rec.approver_name or ""
+                signature = rec.approver_name if rec.status == "approved" else ""
+                date_str = rec.approved_at.strftime('%Y-%m-%d') if rec.status == "approved" and rec.approved_at else ""
+                approval_data.append([
+                    _p(level_name, approval_style), _p(approver_name, approval_style),
+                    _p(signature, approval_style), _p(date_str, approval_style)
+                ])
+        db2.close()
+    except Exception:
+        pass
+    if len(approval_data) == 1:
+        approval_data.append([_p("（待提交审批）", approval_style), "", "", ""])
     approval_table = Table(approval_data, colWidths=[100, 120, 120, 120])
     approval_table.setStyle(TableStyle([
         ('FONTNAME', (0, 0), (-1, -1), CN_FONT),
