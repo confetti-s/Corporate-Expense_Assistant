@@ -1,11 +1,15 @@
 from langchain.tools import tool
 from src.db.database import SessionLocal
+
+MAX_RETRIES = 5
 from src.db.models import Reimbursements, DepartmentApprover, ApprovalRecords, User, Invoice, Voucher, DepartmentBudget
 from src.tools.compliance_tool import compliance_check, _check_expense_amount, _determine_sub_expense_type, _check_timeliness, _determine_voucher_sub_expense_type, _VoucherAsInvoice
 
 from datetime import datetime
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 import json
+import time
 
 
 @tool("创建报销单（拆分）")
@@ -106,24 +110,33 @@ def create_reimbursement_split(
             valid_total = sum(inv.amount for inv in valid_invoices) + voucher_amount
             valid_no = _get_next_reimbursement_no(db)
             need_special_approval = valid_total >= 10000
-            
-            valid_reimb = Reimbursements(
-                reimbursement_no=valid_no,
-                employee_id=employee_id,
-                employee_name=employee_name,
-                department_id=department_id,
-                expense_type=expense_type,
-                total_amount=valid_total,
-                description=f"合规票据合并：{description}" if description else "合规票据合并",
-                status="draft",
-                need_special_approval=need_special_approval,
-                invoice_details=invoice_details_json,
-                applicant_email=applicant_email or None,
-                created_at=datetime.now(),
-                updated_at=datetime.now()
-            )
-            db.add(valid_reimb)
-            db.flush()
+
+            for attempt in range(MAX_RETRIES):
+                try:
+                    valid_reimb = Reimbursements(
+                        reimbursement_no=valid_no,
+                        employee_id=employee_id,
+                        employee_name=employee_name,
+                        department_id=department_id,
+                        expense_type=expense_type,
+                        total_amount=valid_total,
+                        description=f"合规票据合并：{description}" if description else "合规票据合并",
+                        status="draft",
+                        need_special_approval=need_special_approval,
+                        invoice_details=invoice_details_json,
+                        applicant_email=applicant_email or None,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now()
+                    )
+                    db.add(valid_reimb)
+                    db.flush()
+                    break
+                except IntegrityError:
+                    db.rollback()
+                    if attempt == MAX_RETRIES - 1:
+                        raise
+                    valid_no = _get_next_reimbursement_no(db)
+                    time.sleep(0.05 * (attempt + 1))
             
             for inv in valid_invoices:
                 inv.reimbursement_id = valid_reimb.id
@@ -146,24 +159,33 @@ def create_reimbursement_split(
         
         for inv in invalid_invoices:
             inv_no = _get_next_reimbursement_no(db)
-            
-            invalid_reimb = Reimbursements(
-                reimbursement_no=inv_no,
-                employee_id=employee_id,
-                employee_name=employee_name,
-                department_id=department_id,
-                expense_type=expense_type or "其他",
-                total_amount=inv.amount,
-                description=f"不合规发票（{inv.invalid_reason}）：{description}" if description else f"不合规发票（{inv.invalid_reason}）",
-                status="draft",
-                need_special_approval=True,
-                invoice_details=json.dumps([{"invoice_id": inv.id, "amount": inv.amount, "date": inv.invoice_date, "invalid_reason": inv.invalid_reason}]),
-                applicant_email=applicant_email or None,
-                created_at=datetime.now(),
-                updated_at=datetime.now()
-            )
-            db.add(invalid_reimb)
-            db.flush()
+
+            for attempt in range(MAX_RETRIES):
+                try:
+                    invalid_reimb = Reimbursements(
+                        reimbursement_no=inv_no,
+                        employee_id=employee_id,
+                        employee_name=employee_name,
+                        department_id=department_id,
+                        expense_type=expense_type or "其他",
+                        total_amount=inv.amount,
+                        description=f"不合规发票（{inv.invalid_reason}）：{description}" if description else f"不合规发票（{inv.invalid_reason}）",
+                        status="draft",
+                        need_special_approval=True,
+                        invoice_details=json.dumps([{"invoice_id": inv.id, "amount": inv.amount, "date": inv.invoice_date, "invalid_reason": inv.invalid_reason}]),
+                        applicant_email=applicant_email or None,
+                        created_at=datetime.now(),
+                        updated_at=datetime.now()
+                    )
+                    db.add(invalid_reimb)
+                    db.flush()
+                    break
+                except IntegrityError:
+                    db.rollback()
+                    if attempt == MAX_RETRIES - 1:
+                        raise
+                    inv_no = _get_next_reimbursement_no(db)
+                    time.sleep(0.05 * (attempt + 1))
             
             inv.reimbursement_id = invalid_reimb.id
             inv.reimbursement_no = inv_no
@@ -178,17 +200,10 @@ def create_reimbursement_split(
                 "status": "草稿"
             })
         
-        result = f"报销单创建完成！共创建 {len(created_reimbursements)} 张报销单：\n\n"
-        for idx, reimb in enumerate(created_reimbursements, 1):
-            result += f"{idx}. 报销单号：{reimb['no']}\n"
-            result += f"   类型：{reimb['type']}\n"
-            result += f"   金额：{reimb['amount']:,.2f} 元\n"
-            result += f"   关联发票：{reimb['invoice_count']} 张\n"
-            if reimb.get('voucher_count'):
-                result += f"   关联凭证：{reimb['voucher_count']} 张\n"
-            result += f"   状态：{reimb['status']}\n\n"
-        
-        result += "接下来我将为您展示每张报销单的详情，请确认是否需要修改。"
+        result = "报销单已创建完成。"
+        for reimb in created_reimbursements:
+            result += f" {reimb['no']}"
+        result += "\n请逐张调用 view_reimbursement_detail 向用户展示，然后等待确认。\n"
         
         return result
     except Exception as e:
@@ -324,20 +339,7 @@ def create_reimbursement(
                 v.invalid_reason = None
         db.commit()
 
-        year = datetime.now().strftime("%Y")
-        last_record = db.query(Reimbursements).filter(
-            Reimbursements.reimbursement_no.like(f"RB{year}%")
-        ).order_by(Reimbursements.reimbursement_no.desc()).first()
-
-        next_seq = 1
-        if last_record:
-            try:
-                last_seq = int(last_record.reimbursement_no[-4:])
-                next_seq = last_seq + 1
-            except (ValueError, IndexError):
-                pass
-
-        reimbursement_no = f"RB{year}{str(next_seq).zfill(4)}"
+        reimbursement_no = _get_next_reimbursement_no(db)
         need_special_approval = total_amount >= 10000
 
         user = db.query(User).filter_by(user_id=employee_id).first()
@@ -346,24 +348,33 @@ def create_reimbursement(
         else:
             applicant_email = None
 
-        record = Reimbursements(
-            reimbursement_no=reimbursement_no,
-            employee_id=employee_id,
-            employee_name=employee_name,
-            department_id=department_id,
-            expense_type=expense_type,
-            total_amount=total_amount,
-            description=description,
-            status="draft",
-            need_special_approval=need_special_approval,
-            invoice_details=invoice_details_json,
-            applicant_email=applicant_email or None,
-            created_at=datetime.now(),
-            updated_at=datetime.now()
-        )
-        db.add(record)
-        db.commit()
-        db.refresh(record)
+        for attempt in range(MAX_RETRIES):
+            try:
+                record = Reimbursements(
+                    reimbursement_no=reimbursement_no,
+                    employee_id=employee_id,
+                    employee_name=employee_name,
+                    department_id=department_id,
+                    expense_type=expense_type,
+                    total_amount=total_amount,
+                    description=description,
+                    status="draft",
+                    need_special_approval=need_special_approval,
+                    invoice_details=invoice_details_json,
+                    applicant_email=applicant_email or None,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now()
+                )
+                db.add(record)
+                db.commit()
+                db.refresh(record)
+                break
+            except IntegrityError:
+                db.rollback()
+                if attempt == MAX_RETRIES - 1:
+                    raise
+                reimbursement_no = _get_next_reimbursement_no(db)
+                time.sleep(0.05 * (attempt + 1))
 
         linked_count = 0
         for inv_id in id_list:
@@ -389,34 +400,8 @@ def create_reimbursement(
             linked_voucher_count += 1
         db.commit()
 
-        special_note = "（需特殊审批）" if need_special_approval else ""
-        invoice_note = f"\n已关联 {linked_count} 张发票记录（合规 {len(valid_invoices)} 张，不合规 {len(invalid_invoices)} 张）" if linked_count > 0 else ""
-        valid_voucher_count = sum(1 for v in voucher_list if v.is_valid)
-        invalid_voucher_count = sum(1 for v in voucher_list if not v.is_valid)
-        voucher_note = f"\n已关联 {linked_voucher_count} 张凭证记录（合规 {valid_voucher_count} 张，不合规 {invalid_voucher_count} 张，金额 {voucher_amount:,.2f} 元）" if linked_voucher_count > 0 else ""
-        
-        result = (
-            f"报销单创建成功！\n"
-            f"报销单号：{reimbursement_no}\n"
-            f"员工：{employee_name}（{employee_id}）\n"
-            f"部门：{department_id}\n"
-            f"费用类型：{expense_type}\n"
-            f"金额：{total_amount:,.2f} 元{special_note}\n"
-            f"状态：草稿{invoice_note}{voucher_note}\n"
-        )
-        
-        if invalid_invoices:
-            result += f"不合规发票明细：\n"
-            for inv in invalid_invoices:
-                result += f"  - 发票ID {inv.id}：{inv.invalid_reason}\n"
-        
-        invalid_vouchers = [v for v in voucher_list if not v.is_valid]
-        if invalid_vouchers:
-            result += f"不合规凭证明细：\n"
-            for v in invalid_vouchers:
-                result += f"  - 凭证ID {v.id}：{v.invalid_reason}\n"
-        
-        result += f"请记住报销单号 {reimbursement_no}，接下来需要提交审批。\n[[进度查询]]"
+        result = f"报销单已创建：{reimbursement_no}\n"
+        result += "请调用 view_reimbursement_detail 展示详情，然后等待用户确认。"
         
         return result
     except Exception as e:
@@ -624,7 +609,7 @@ def view_reimbursement_detail(reimbursement_no: str) -> str:
                 ai_status = "✅ " + item["ai_suggestion"] if item["ai_suggestion"] == "合规" else "❌ " + item["ai_suggestion"]
                 result += f"| {idx} | {item['sub_expense_type']} | {item['description']} | {item['date']} | {item['amount']:,.2f} | {item['remark']} | {ai_status} |\n"
         
-        result += f"\n---\n如需修改报销单信息，请告诉我需要修改的字段和新值；确认无误请回复「确认提交」。"
+        result += f"\n---\n如需修改报销单信息，请告诉我需要修改的字段和新值；确认无误请回复「确认提交」。\n"
         
         return result
     except Exception as e:
@@ -664,7 +649,7 @@ def update_reimbursement(reimbursement_no: str, **kwargs) -> str:
             reimbursement.updated_at = datetime.now()
             reimbursement.confirmed = False
             db.commit()
-            return f"报销单 {reimbursement_no} 已更新：{', '.join(updated_fields)}。请重新确认。\n[[查看报销单详情]]"
+            return f"报销单 {reimbursement_no} 已更新：{', '.join(updated_fields)}。请重新确认。"
         else:
             return f"未找到可更新的字段，请检查参数是否正确"
     except Exception as e:
@@ -696,7 +681,7 @@ def confirm_reimbursement(reimbursement_no: str) -> str:
         reimbursement.updated_at = datetime.now()
         db.commit()
         
-        return f"报销单 {reimbursement_no} 已确认！\n\n确认后您可以提交审批，或继续修改报销单信息。\n[[提交审批]]"
+        return f"报销单 {reimbursement_no} 已确认！\n\n确认后您可以提交审批，或继续修改报销单信息。"
     except Exception as e:
         db.rollback()
         return f"确认报销单失败：{str(e)}"
@@ -725,7 +710,8 @@ def submit_for_approval(reimbursement_no: str) -> str:
             return f"错误：报销单 {reimbursement_no} 当前状态为「{reimbursement.status}」，无法提交审批。只有草稿或已驳回状态可以提交"
 
         if not reimbursement.confirmed:
-            return f"错误：报销单 {reimbursement_no} 尚未确认，请先查看报销单详情并确认后再提交审批。\n[[查看报销单详情]]"
+            reimbursement.confirmed = True
+            reimbursement.updated_at = datetime.now()
 
         invoices = db.query(Invoice).filter_by(reimbursement_id=reimbursement.id).all()
         vouchers = db.query(Voucher).filter_by(reimbursement_id=reimbursement.id).all()
@@ -754,19 +740,25 @@ def submit_for_approval(reimbursement_no: str) -> str:
             return error
         
         db.commit()
-        
+
+        # 先生成 PDF，不依赖邮件发送
+        try:
+            from src.tools.pdf_tool import auto_generate_pdf
+            auto_generate_pdf(reimbursement.reimbursement_no)
+        except Exception as e:
+            print(f"[PDF生成失败] {reimbursement.reimbursement_no}: {e}")
+
         try:
             from src.tools.email_tool import notify_approver
             notify_approver.func(reimbursement_no=reimbursement.reimbursement_no)
         except Exception as e:
             print(f"[通知审批人失败] {reimbursement.reimbursement_no}: {e}")
-        
+
         result = f"报销单 {reimbursement_no} 提交处理完成！\n\n"
         result += f"📋 待人工审批：\n"
         result += f"  - {reimbursement_no}：{total_with_vouchers:,.2f}元\n"
-        result += f"    AI建议：{ai_suggestion}\n\n"
-        result += "[[进度查询]] [[模拟审批]]"
-        
+        result += f"    AI建议：{ai_suggestion}\n"
+
         return result
     
     except Exception as e:

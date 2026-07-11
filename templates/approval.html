@@ -60,6 +60,19 @@
 </div>
 
 <script>
+async function viewReimbursementPDF(reimbursementNo) {
+    try {
+        const result = await checkPDFExists(reimbursementNo);
+        if (result.exists) {
+            window.open(result.pdf_url, '_blank');
+        } else {
+            window.location.href = '/progress';
+        }
+    } catch (e) {
+        window.location.href = '/progress';
+    }
+}
+
 async function loadPendingApprovals() {
     try {
         const data = await getPendingApprovals();
@@ -112,7 +125,7 @@ function renderApprovalList(items) {
                             <p class="text-label-sm text-on-surface-variant uppercase mb-xs">Details</p>
                             <p class="text-body-md">审批级别: L${item.approval_level} | 说明: ${item.description || '-'}</p>
                         </div>
-                        <button class="flex items-center gap-xs px-md py-sm rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition-colors" onclick="window.location.href='/progress'">
+                        <button class="flex items-center gap-xs px-md py-sm rounded-lg border border-primary text-primary font-bold hover:bg-primary/5 transition-colors" onclick="viewReimbursementPDF('${item.reimbursement_no}')">
                             <span class="material-symbols-outlined">visibility</span> View
                         </button>
                     </div>

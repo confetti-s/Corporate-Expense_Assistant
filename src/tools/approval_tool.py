@@ -193,7 +193,6 @@ def approve_or_reject_reimbursement(
                 f"审批意见：{comment or '无'}\n"
                 f"报销单状态：已驳回\n"
                 f"用户可修改后重新提交。\n"
-                f"[[对话报销]]"
             )
 
         # 通过逻辑
@@ -215,7 +214,6 @@ def approve_or_reject_reimbursement(
                 f"报销单号：{reimbursement_no}\n"
                 f"审批人：{approver_name}\n"
                 f"当前状态：审批中（等待第{level + 1}级审批）\n"
-                f"[[模拟审批]]"
             )
 
         # 最后一级通过
@@ -241,8 +239,6 @@ def approve_or_reject_reimbursement(
             f"金额：{reimbursement.total_amount:,.2f} 元\n"
             f"费用类型：{reimbursement.expense_type}\n"
             f"最终状态：已通过\n"
-            f"[[进度查询]]\n"
-            f"[[预算看板]]"
         )
     except Exception as e:
         db.rollback()

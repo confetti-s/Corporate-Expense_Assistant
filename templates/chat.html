@@ -131,6 +131,7 @@
 </div>
 
 <script>
+marked.setOptions({ breaks: true });
 // 检测账号切换，清空旧账号数据
 const currentUser = getCurrentUser();
 const storedUserId = sessionStorage.getItem('chat_user_id');
@@ -424,6 +425,45 @@ function parseAndAddReimbursements(text) {
         renderUploadedList();
         persistSession();
     }
+
+    // 第二遍：匹配裸 RB 编号（无"报销单"前缀，AI 批处理总结时常见）
+    const bareRBPattern = /\b(RB\d{8})\b/g;
+    while ((match = bareRBPattern.exec(text)) !== null) {
+        const reportNo = match[1];
+        const existing = uploadedItems.find(i => i.reportNo === reportNo);
+        if (existing) {
+            if (existing.fileType === 'pdf') continue;
+            const isSubmit = text.includes('提交处理完成') || text.includes('提交审批成功') ||
+                             text.includes('已提交') || text.includes('待审批');
+            if (isSubmit && existing.fileType === 'reimbursement' && existing.status !== '已提交') {
+                existing.status = '已提交';
+                verifyAndAddPDFItem(reportNo, existing.amount || 0, existing.typeName || '');
+                renderUploadedList();
+                persistSession();
+            }
+            continue;
+        }
+        const isSubmit = text.includes('提交处理完成') || text.includes('提交审批成功') ||
+                         text.includes('已提交') || text.includes('待审批');
+        uploadedItems.push({
+            filePath: null,
+            filename: reportNo,
+            fileType: 'reimbursement',
+            amount: 0,
+            typeName: '',
+            reportNo: reportNo,
+            status: isSubmit ? '已提交' : '',
+            employee: '',
+            isImage: false,
+            pdfUrl: `/outputs/reimbursement_${reportNo}.pdf`,
+            time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+        });
+        if (isSubmit) {
+            verifyAndAddPDFItem(reportNo, 0, '');
+        }
+        renderUploadedList();
+        persistSession();
+    }
 }
 
 async function verifyAndAddPDFItem(reportNo, amount, typeName) {
@@ -432,6 +472,16 @@ async function verifyAndAddPDFItem(reportNo, amount, typeName) {
     try {
         const result = await checkPDFExists(reportNo);
         if (result.exists) {
+            // 从 API 获取准确的报销单详情，避免文本解析导致的元数据错配
+            try {
+                const detail = await getReimbursementDetail(reportNo);
+                if (detail && !detail.error) {
+                    amount = detail.total_amount || amount;
+                    typeName = detail.expense_type || typeName;
+                }
+            } catch (e) {
+                console.warn('Fetch reimbursement detail failed:', e);
+            }
             addPDFItem(reportNo, amount, typeName);
         }
     } catch (e) {
