@@ -1,20 +1,27 @@
 """对话报销相关 API 路由"""
+import asyncio
+import time
+import json
+import uuid
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
-from typing import Optional
 from pydantic import BaseModel
 from src.db.database import SessionLocal
 from src.db.models import ChatHistory
 from api.auth import get_current_user
-from datetime import datetime
-import uuid
-import json
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 
 class ChatRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None
+
+
+class ChatContextRequest(BaseModel):
+    content: str
+    role: str = "assistant"
     session_id: Optional[str] = None
 
 
@@ -38,15 +45,41 @@ async def send_message(req: ChatRequest, user: dict = Depends(get_current_user))
     finally:
         db.close()
 
+    # 加载历史对话，构建 Agent 上下文记忆
+    db2 = SessionLocal()
+    chat_history = []
+    try:
+        history_records = (
+            db2.query(ChatHistory)
+            .filter_by(user_id=user["user_id"], session_id=session_id)
+            .order_by(ChatHistory.created_at.asc())
+            .limit(20)
+            .all()
+        )
+        for m in history_records:
+            chat_history.append({"role": m.role, "content": m.content})
+    finally:
+        db2.close()
+
     # 构建带用户上下文的查询
     enriched_query = f"[当前用户: {user['name']}({user['user_id']}), 部门: {user.get('department_id', 'N/A')}, 角色: {user['role']}]\n{req.message}"
 
     async def generate():
         full_response = ""
         try:
-            for char in run_agent(enriched_query):
-                full_response += char
-                yield f"data: {json.dumps({'chunk': char})}\n\n"
+            buf = ""
+            last_flush = time.monotonic()
+            for chunk in run_agent(enriched_query, chat_history=chat_history):
+                full_response += chunk
+                buf += chunk
+                now = time.monotonic()
+                if buf and (now - last_flush >= 0.08 or len(buf) >= 15):
+                    yield f"data: {json.dumps({'chunk': buf})}\n\n"
+                    buf = ""
+                    last_flush = now
+                    await asyncio.sleep(0)
+            if buf:
+                yield f"data: {json.dumps({'chunk': buf})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         finally:
@@ -73,6 +106,24 @@ async def send_message(req: ChatRequest, user: dict = Depends(get_current_user))
             "X-Accel-Buffering": "no",
         }
     )
+
+
+@router.post("/context")
+async def save_context(req: ChatContextRequest, user: dict = Depends(get_current_user)):
+    """保存上下文消息到聊天历史（不触发AI响应），用于OCR结果等"""
+    session_id = req.session_id or uuid.uuid4().hex
+    db = SessionLocal()
+    try:
+        db.add(ChatHistory(
+            user_id=user["user_id"],
+            session_id=session_id,
+            role=req.role,
+            content=req.content,
+        ))
+        db.commit()
+        return {"success": True, "session_id": session_id}
+    finally:
+        db.close()
 
 
 @router.get("/history")

@@ -5,6 +5,7 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>{% block title %}FinFlow Corp{% endblock %}</title>
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <link rel="stylesheet" href="/static/css/app.css"/>
@@ -51,7 +52,7 @@
         },
     }
 </script>
-<script src="/static/js/api.js"></script>
+<script src="/static/js/api.js?v=4"></script>
 </head>
 <body class="bg-background text-on-background font-body-md min-h-screen">
 {% set active_page = active_page|default('chat') %}
@@ -131,6 +132,12 @@
 </div>
 
 <script>
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // 初始化用户信息
 (function() {
     const user = getCurrentUser();

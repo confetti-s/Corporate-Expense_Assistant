@@ -40,7 +40,7 @@ def get_agent():
 
 
 def run_agent(user_query: str, chat_history: list = None):
-    """生成器函数，逐块返回 Agent 响应（字符级流式）"""
+    """生成器函数，逐块返回 Agent 响应（真正的流式输出）"""
     try:
         agent = get_agent()
 
@@ -52,30 +52,18 @@ def run_agent(user_query: str, chat_history: list = None):
 
         messages.append({"role": "user", "content": user_query})
 
-        full_response = ""
-        
-        for chunk in agent.stream({"messages": messages}):
-            if isinstance(chunk, dict):
-                if "model" in chunk:
-                    model_data = chunk["model"]
-                    if isinstance(model_data, dict) and "messages" in model_data:
-                        for msg in model_data["messages"]:
-                            if isinstance(msg, AIMessage):
-                                if msg.content:
-                                    full_response = msg.content
-                                elif msg.tool_calls and len(msg.tool_calls) > 0:
-                                    pass
-                elif isinstance(chunk.get("messages"), list):
-                    for msg in chunk["messages"]:
-                        if isinstance(msg, AIMessage) and msg.content:
-                            full_response = msg.content
-        
-        if full_response:
-            for char in full_response:
-                yield char
-        else:
+        yielded_any = False
+
+        for event in agent.stream({"messages": messages}, stream_mode="messages"):
+            if isinstance(event, tuple) and len(event) >= 1:
+                msg = event[0]
+                if hasattr(msg, "content") and msg.content:
+                    yielded_any = True
+                    yield msg.content
+
+        if not yielded_any:
             yield "抱歉，我无法理解您的请求，请换一种方式描述。"
-            
+
     except Exception as e:
         yield f"Agent执行失败：{str(e)}\n请确保已正确配置.env文件中的DASHSCOPE_API_KEY和WORKSPACE_ID"
 

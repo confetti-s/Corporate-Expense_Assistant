@@ -120,6 +120,15 @@ async function getChatSessions() {
     return await res.json();
 }
 
+async function saveChatContext(content, role, sessionId) {
+    const res = await fetch(`${API_BASE}/api/chat/context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content, role, session_id: sessionId }),
+    });
+    return await res.json();
+}
+
 // ====== 预算相关 ======
 
 async function getAllBudgets() {
@@ -204,6 +213,60 @@ async function uploadInvoices(files) {
     if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || '文件批量上传失败');
+    }
+    return await res.json();
+}
+
+async function recognizeInvoice(filePath) {
+    const res = await fetch(`${API_BASE}/api/ocr/invoice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'OCR识别失败');
+    }
+    return await res.json();
+}
+
+async function recognizeInvoices(filePaths) {
+    const res = await fetch(`${API_BASE}/api/ocr/invoices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_paths: filePaths }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || '批量OCR识别失败');
+    }
+    return await res.json();
+}
+
+// ====== 凭证上传 ======
+
+async function recognizeVoucher(filePath) {
+    const res = await fetch(`${API_BASE}/api/ocr/voucher`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || '凭证识别失败');
+    }
+    return await res.json();
+}
+
+async function recognizeVouchers(filePaths) {
+    const res = await fetch(`${API_BASE}/api/ocr/vouchers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_paths: filePaths }),
+    });
+    if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || '批量凭证识别失败');
     }
     return await res.json();
 }

@@ -4,32 +4,47 @@
 
 {% block content %}
 <div class="p-lg flex gap-lg h-[calc(100vh-64px)] overflow-hidden">
-    <!-- Left Sidebar: Upload Area -->
-    <section class="w-1/3 flex flex-col gap-lg">
-        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl p-xl flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary hover:bg-surface-container-low transition-all" id="upload-area">
-            <div class="w-20 h-20 rounded-full bg-primary/5 flex items-center justify-center mb-md group-hover:scale-110 transition-transform">
-                <span class="material-symbols-outlined text-primary text-[48px]">cloud_upload</span>
+    <!-- Left Sidebar: Upload Areas + Uploaded List -->
+    <section class="w-1/3 flex flex-col gap-md">
+        <!-- Invoice Upload Area -->
+        <div class="shrink-0 bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center group cursor-pointer hover:border-primary hover:bg-surface-container-low transition-all" id="invoice-upload-area">
+            <div class="flex items-center gap-md">
+                <span class="material-symbols-outlined text-primary text-[44px] group-hover:scale-110 transition-transform">receipt_long</span>
+                <div class="text-left">
+                    <h3 class="font-headline-sm text-headline-sm text-primary">上传发票 Invoice</h3>
+                    <p class="text-[11px] text-on-surface-variant">支持 JPG / PNG / PDF，可多选或拖拽</p>
+                </div>
             </div>
-            <h3 class="font-headline-sm text-headline-sm text-primary mb-xs">上传区域 Upload Area</h3>
-            <p class="font-body-md text-body-md text-on-surface-variant mb-lg">Drag and drop receipts here or click to browse</p>
-            <div class="flex flex-wrap justify-center gap-sm">
-                <span class="px-sm py-1 bg-surface-variant text-primary font-label-sm text-label-sm rounded uppercase">JPG</span>
-                <span class="px-sm py-1 bg-surface-variant text-primary font-label-sm text-label-sm rounded uppercase">PNG</span>
-                <span class="px-sm py-1 bg-surface-variant text-primary font-label-sm text-label-sm rounded uppercase">PDF</span>
-            </div>
-            <input type="file" id="file-input" class="hidden" accept=".jpg,.jpeg,.png,.pdf" multiple onchange="handleFileUpload(event)"/>
+            <input type="file" id="invoice-file-input" class="hidden" accept=".jpg,.jpeg,.png,.pdf" multiple onchange="handleInvoiceUpload(event)"/>
         </div>
-        <!-- Receipt Preview -->
-        <div class="h-64 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden p-md">
-            <div class="flex justify-between items-center mb-sm">
-                <span class="font-label-md text-label-md font-bold text-on-surface-variant">RECENT RECEIPTS</span>
-                <span class="material-symbols-outlined text-outline cursor-pointer">more_horiz</span>
+        <!-- Voucher Upload Area -->
+        <div class="shrink-0 bg-surface-container-lowest border border-outline-variant rounded-xl p-md flex flex-col items-center justify-center text-center group cursor-pointer hover:border-orange-400 hover:bg-surface-container-low transition-all" id="voucher-upload-area">
+            <div class="flex items-center gap-md">
+                <span class="material-symbols-outlined text-orange-500 text-[44px] group-hover:scale-110 transition-transform">image</span>
+                <div class="text-left">
+                    <h3 class="font-headline-sm text-headline-sm text-orange-600">上传凭证 Voucher</h3>
+                    <p class="text-[11px] text-on-surface-variant">支持 JPG / PNG / BMP，可多选或拖拽</p>
+                </div>
             </div>
-            <div class="grid grid-cols-2 gap-sm h-[calc(100%-32px)]" id="recent-receipts">
-                <div class="bg-surface-container rounded-lg flex items-center justify-center text-label-sm text-on-surface-variant">暂无发票</div>
+            <input type="file" id="voucher-file-input" class="hidden" accept=".jpg,.jpeg,.png,.bmp" multiple onchange="handleVoucherUpload(event)"/>
+        </div>
+        <!-- Uploaded Items List -->
+        <div class="flex-1 bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden flex flex-col min-h-0">
+            <div class="px-md py-sm border-b border-outline-variant flex justify-between items-center shrink-0">
+                <span class="font-label-sm text-label-sm font-bold text-on-surface-variant">已上传文件 Uploaded Files</span>
+                <span class="text-[10px] text-outline" id="uploaded-count">0 项</span>
+            </div>
+            <div class="flex-1 overflow-y-auto p-sm space-y-xs" id="uploaded-items-list">
+                <div class="text-center text-label-sm text-on-surface-variant py-lg" id="uploaded-empty-hint">暂无已上传文件</div>
             </div>
         </div>
     </section>
+
+    <!-- Image Preview Modal -->
+    <div class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center" id="image-modal" onclick="closeImageModal()">
+        <span class="absolute top-lg right-lg text-white text-[32px] cursor-pointer hover:opacity-70" onclick="closeImageModal()">&times;</span>
+        <img src="" alt="预览" class="max-w-[85vw] max-h-[85vh] rounded-lg shadow-2xl object-contain" id="image-modal-img" onclick="event.stopPropagation()"/>
+    </div>
 
     <!-- Right Panel: Chat Interface -->
     <section class="flex-1 flex flex-col bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
@@ -68,17 +83,21 @@
         <!-- Chat Footer -->
         <div class="p-lg border-t border-outline-variant bg-white">
             <div class="flex gap-sm mb-lg">
-                <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="document.getElementById('file-input').click()">
-                    <span class="material-symbols-outlined text-[18px]">upload_file</span>
-                    上传发票 Upload Invoice
+                <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="document.getElementById('invoice-file-input').click()">
+                    <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                    上传发票 Invoice
+                </button>
+                <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-orange-400 hover:text-orange-500 transition-all active:scale-95" onclick="document.getElementById('voucher-file-input').click()">
+                    <span class="material-symbols-outlined text-[18px]">image</span>
+                    上传凭证 Voucher
                 </button>
                 <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="window.location.href='/progress'">
                     <span class="material-symbols-outlined text-[18px]">analytics</span>
-                    查看进度 Check Progress
+                    查看进度 Progress
                 </button>
                 <button class="flex-1 py-sm px-md border border-outline-variant rounded-lg flex items-center justify-center gap-sm font-label-md text-label-md text-on-surface-variant hover:border-primary hover:text-primary transition-all active:scale-95" onclick="window.location.href='/budget'">
                     <span class="material-symbols-outlined text-[18px]">account_balance_wallet</span>
-                    查看预算 View Budget
+                    预算 Budget
                 </button>
             </div>
             <div class="relative">
@@ -94,40 +113,292 @@
 </div>
 
 <script>
-let currentSessionId = null;
-
-// 上传区域点击
-document.getElementById('upload-area').addEventListener('click', function(e) {
-    if (e.target.tagName !== 'INPUT') {
-        document.getElementById('file-input').click();
-    }
-});
-
-document.getElementById('upload-area').addEventListener('dragover', (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.add('bg-primary/5', 'border-primary');
-});
-document.getElementById('upload-area').addEventListener('dragleave', (e) => {
-    e.currentTarget.classList.remove('bg-primary/5', 'border-primary');
-});
-document.getElementById('upload-area').addEventListener('drop', (e) => {
-    e.preventDefault();
-    e.currentTarget.classList.remove('bg-primary/5', 'border-primary');
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        handleFiles(files);
-    }
-});
-
-function handleFileUpload(event) {
-    const files = event.target.files;
-    if (files.length > 0) handleFiles(files);
+// 检测账号切换，清空旧账号数据
+const currentUser = getCurrentUser();
+const storedUserId = sessionStorage.getItem('chat_user_id');
+if (storedUserId && currentUser && storedUserId !== currentUser.user_id) {
+    sessionStorage.removeItem('chat_session_id');
+    sessionStorage.removeItem('chat_uploaded_items');
+    sessionStorage.removeItem('chat_user_id');
+}
+if (currentUser) {
+    sessionStorage.setItem('chat_user_id', currentUser.user_id);
 }
 
-async function handleFiles(files) {
-    // Show uploading indicator
-    const fileNames = Array.from(files).map(f => f.name).join(', ');
-    const statusEl = addAIMessage(`正在上传 ${files.length} 个文件...`);
+let currentSessionId = sessionStorage.getItem('chat_session_id') || null;
+let uploadedItems = JSON.parse(sessionStorage.getItem('chat_uploaded_items') || '[]');
+
+// ====== 页面初始化：恢复聊天历史 ======
+
+(async function initChat() {
+    if (currentSessionId) {
+        try {
+            const history = await getChatHistory(currentSessionId);
+            const container = document.getElementById('chat-messages');
+            if (history.messages && history.messages.length > 0) {
+                container.innerHTML = '';
+                history.messages.forEach(msg => {
+                    if (msg.role === 'user') {
+                        addUserMessage(msg.content);
+                    } else {
+                        const el = addAIMessage('');
+                        el.innerHTML = marked.parse(msg.content);
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('恢复聊天历史失败:', e);
+        }
+    }
+    renderUploadedList();
+})();
+
+function persistSession() {
+    sessionStorage.setItem('chat_session_id', currentSessionId || '');
+    sessionStorage.setItem('chat_uploaded_items', JSON.stringify(uploadedItems));
+    const user = getCurrentUser();
+    if (user) sessionStorage.setItem('chat_user_id', user.user_id);
+}
+
+// ====== 已上传文件管理 ======
+
+function filePathToUrl(filePath) {
+    if (!filePath) return '';
+    const normalized = filePath.replace(/\\/g, '/');
+    const idx = normalized.indexOf('/uploads/');
+    if (idx !== -1) return normalized.substring(idx);
+    const filename = normalized.split('/').pop();
+    return `/uploads/invoices/${filename}`;
+}
+
+function isImageFile(filePath) {
+    if (!filePath) return false;
+    const ext = filePath.split('.').pop().toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'bmp', 'gif', 'webp'].includes(ext);
+}
+
+function addUploadedItems(filePaths, fileType, ocrResult) {
+    const items = fileType === 'voucher'
+        ? (ocrResult.vouchers || [])
+        : (ocrResult.invoices || []);
+
+    filePaths.forEach((fp, i) => {
+        const item = items[i] || {};
+        uploadedItems.push({
+            filePath: fp,
+            filename: fp.split(/[/\\]/).pop(),
+            fileType: fileType,
+            amount: item.amount || 0,
+            typeName: item.type_name || item.voucher_type || '',
+            recordId: item.invoice_id || item.voucher_id || null,
+            isImage: isImageFile(fp),
+            time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+        });
+    });
+    renderUploadedList();
+    persistSession();
+}
+
+function renderUploadedList() {
+    const container = document.getElementById('uploaded-items-list');
+    const countEl = document.getElementById('uploaded-count');
+    const emptyHint = document.getElementById('uploaded-empty-hint');
+
+    countEl.textContent = `${uploadedItems.length} 项`;
+
+    if (uploadedItems.length === 0) {
+        container.innerHTML = '';
+        container.appendChild(createElement('div', {className: 'text-center text-label-sm text-on-surface-variant py-lg', id: 'uploaded-empty-hint'}, '暂无已上传文件'));
+        return;
+    }
+
+    container.innerHTML = '';
+    uploadedItems.forEach((item, idx) => {
+        let bgClass, icon, iconColor, label;
+        if (item.fileType === 'voucher') {
+            bgClass = 'bg-orange-50 border-orange-200';
+            icon = 'image';
+            iconColor = 'text-orange-500';
+            label = '凭证';
+        } else if (item.fileType === 'reimbursement') {
+            bgClass = 'bg-emerald-50 border-emerald-200';
+            icon = 'description';
+            iconColor = 'text-emerald-600';
+            label = '报销单';
+        } else {
+            bgClass = 'bg-blue-50 border-blue-200';
+            icon = 'receipt_long';
+            iconColor = 'text-primary';
+            label = '发票';
+        }
+
+        const div = document.createElement('div');
+        div.className = `flex items-center gap-sm p-xs rounded-lg border ${bgClass} cursor-pointer hover:shadow-sm transition-all`;
+        if (item.fileType === 'reimbursement') {
+            div.onclick = () => { window.location.href = '/progress'; };
+        } else {
+            div.onclick = () => { if (item.isImage) openImageModal(filePathToUrl(item.filePath)); };
+        }
+
+        if (item.fileType === 'reimbursement') {
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded bg-white flex items-center justify-center shrink-0">
+                    <span class="material-symbols-outlined ${iconColor} text-[20px]">${icon}</span>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-[11px] font-medium text-on-surface truncate" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</p>
+                    <p class="text-[10px] text-on-surface-variant">
+                        <span class="${iconColor} font-bold">${item.amount > 0 ? formatMoney(item.amount) : ''}</span>
+                        ${item.typeName ? ' · ' + escapeHtml(item.typeName) : ''}
+                        ${item.status ? ' · ' + escapeHtml(item.status) : ''}
+                    </p>
+                </div>
+                <span class="material-symbols-outlined text-outline text-[14px] shrink-0">open_in_new</span>
+            `;
+        } else {
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded bg-white flex items-center justify-center overflow-hidden shrink-0">
+                    ${item.isImage
+                        ? `<img src="${filePathToUrl(item.filePath)}" alt="" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<span class=\\'material-symbols-outlined text-outline text-[18px]\\'>broken_image</span>'"/>`
+                        : `<span class="material-symbols-outlined text-outline text-[18px]">description</span>`
+                    }
+                </div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-[11px] font-medium text-on-surface truncate" title="${escapeHtml(item.filename)}">${escapeHtml(item.filename)}</p>
+                    <p class="text-[10px] text-on-surface-variant">
+                        <span class="${iconColor} font-bold">${item.amount > 0 ? formatMoney(item.amount) : ''}</span>
+                        ${item.typeName ? ' · ' + escapeHtml(item.typeName) : ''}
+                    </p>
+                </div>
+                <span class="material-symbols-outlined ${iconColor} text-[16px] shrink-0">${icon}</span>
+            `;
+        }
+        container.appendChild(div);
+    });
+}
+
+function openImageModal(url) {
+    const modal = document.getElementById('image-modal');
+    const img = document.getElementById('image-modal-img');
+    img.src = url;
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('image-modal');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+function createElement(tag, attrs, text) {
+    const el = document.createElement(tag);
+    if (attrs) Object.assign(el, attrs);
+    if (text) el.textContent = text;
+    return el;
+}
+
+function parseAndAddReimbursements(text) {
+    if (!text) return;
+    const reimbPattern = /报销单号[：:]?\s*(RB\d{8})/g;
+    const seen = new Set(uploadedItems.filter(i => i.fileType === 'reimbursement').map(i => i.reportNo));
+    let match;
+    while ((match = reimbPattern.exec(text)) !== null) {
+        const reportNo = match[1];
+        if (seen.has(reportNo)) continue;
+        seen.add(reportNo);
+
+        // 提取金额
+        let amount = 0;
+        const amtMatch = text.match(/金额[：:]?\s*([\d,]+\.?\d*)\s*元/);
+        if (amtMatch) amount = parseFloat(amtMatch[1].replace(/,/g, '')) || 0;
+
+        // 提取状态
+        let status = '';
+        if (text.includes('提交处理完成') || text.includes('提交审批成功')) status = '已提交';
+        else if (text.includes('已确认')) status = '已确认';
+        else if (text.includes('创建成功') || text.includes('创建完成')) status = '草稿';
+
+        // 提取员工
+        let employee = '';
+        const empMatch = text.match(/员工[：:]?\s*(.+?)[（(]/);
+        if (empMatch) employee = empMatch[1].trim();
+
+        // 提取费用类型
+        let expType = '';
+        const expMatch = text.match(/费用类型[：:]?\s*(.+)/);
+        if (expMatch) expType = expMatch[1].trim();
+
+        uploadedItems.push({
+            filePath: null,
+            filename: reportNo,
+            fileType: 'reimbursement',
+            amount: amount,
+            typeName: expType,
+            reportNo: reportNo,
+            status: status,
+            employee: employee,
+            isImage: false,
+            time: new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
+        });
+        renderUploadedList();
+        persistSession();
+    }
+}
+
+// ====== 上传区域事件绑定 ======
+
+// 发票上传区域
+document.getElementById('invoice-upload-area').addEventListener('click', function(e) {
+    if (e.target.tagName !== 'INPUT') {
+        document.getElementById('invoice-file-input').click();
+    }
+});
+['dragover', 'dragleave', 'drop'].forEach(evt => {
+    document.getElementById('invoice-upload-area').addEventListener(evt, (e) => {
+        e.preventDefault();
+        if (evt === 'dragover') e.currentTarget.classList.add('bg-primary/5', 'border-primary');
+        else e.currentTarget.classList.remove('bg-primary/5', 'border-primary');
+        if (evt === 'drop' && e.dataTransfer.files.length > 0) handleInvoiceFiles(e.dataTransfer.files);
+    });
+});
+
+function handleInvoiceUpload(event) {
+    const files = event.target.files;
+    if (files.length > 0) handleInvoiceFiles(files);
+}
+
+// 凭证上传区域
+document.getElementById('voucher-upload-area').addEventListener('click', function(e) {
+    if (e.target.tagName !== 'INPUT') {
+        document.getElementById('voucher-file-input').click();
+    }
+});
+['dragover', 'dragleave', 'drop'].forEach(evt => {
+    document.getElementById('voucher-upload-area').addEventListener(evt, (e) => {
+        e.preventDefault();
+        if (evt === 'dragover') e.currentTarget.classList.add('bg-orange-50', 'border-orange-400');
+        else e.currentTarget.classList.remove('bg-orange-50', 'border-orange-400');
+        if (evt === 'drop' && e.dataTransfer.files.length > 0) handleVoucherFiles(e.dataTransfer.files);
+    });
+});
+
+function handleVoucherUpload(event) {
+    const files = event.target.files;
+    if (files.length > 0) handleVoucherFiles(files);
+}
+
+async function handleInvoiceFiles(files) {
+    await handleUploadFiles(files, 'invoice');
+}
+
+async function handleVoucherFiles(files) {
+    await handleUploadFiles(files, 'voucher');
+}
+
+async function handleUploadFiles(files, fileType) {
+    const typeLabel = fileType === 'voucher' ? '凭证' : '发票';
+    const statusEl = addAIMessage(`正在上传并识别 ${files.length} 个${typeLabel}...`);
 
     try {
         const result = await uploadInvoices(files);
@@ -135,22 +406,70 @@ async function handleFiles(files) {
         const failed = result.files.filter(f => !f.success);
 
         if (uploaded.length === 0) {
-            statusEl.textContent = '文件上传失败：' + (failed[0]?.error || '未知错误');
+            statusEl.textContent = `${typeLabel}上传失败：` + (failed[0]?.error || '未知错误');
             return;
         }
 
-        const filePaths = uploaded.map(f => f.file_path).join(', ');
-        statusEl.textContent = `已上传 ${uploaded.length} 个文件${failed.length > 0 ? '（' + failed.length + ' 个失败）' : ''}，正在提交AI识别...`;
+        statusEl.textContent = `已上传 ${uploaded.length} 个${typeLabel}，正在OCR识别...`;
 
-        // Build message with file paths
-        const msg = files.length > 1
-            ? `我上传了${uploaded.length}张发票，文件路径: ${filePaths}，请帮我识别并创建报销单`
-            : `我上传了一张发票，文件路径: ${filePaths}，请帮我识别并创建报销单`;
+        // 根据类型调用不同的 OCR API
+        let ocrResult;
+        if (fileType === 'voucher') {
+            if (uploaded.length === 1) {
+                ocrResult = await recognizeVoucher(uploaded[0].file_path);
+            } else {
+                ocrResult = await recognizeVouchers(uploaded.map(f => f.file_path));
+            }
+        } else {
+            if (uploaded.length === 1) {
+                ocrResult = await recognizeInvoice(uploaded[0].file_path);
+            } else {
+                ocrResult = await recognizeInvoices(uploaded.map(f => f.file_path));
+            }
+        }
 
-        document.getElementById('chat-input').value = msg;
-        sendMessage();
+        // 将状态文字替换为 OCR 识别结果（更新原气泡，避免留下空白框）
+        const icon = fileType === 'voucher' ? 'image' : 'receipt_long';
+        const container = document.getElementById('chat-messages');
+        const bubble = statusEl.closest('.flex.justify-start');
+        const rendered = marked.parse(ocrResult.markdown);
+        if (bubble) {
+            bubble.innerHTML = `<div class="flex gap-sm max-w-[85%]">
+                <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-primary text-[18px]">${icon}</span>
+                </div>
+                <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
+                    <div class="font-body-md text-body-md text-on-surface markdown-body">${rendered}</div>
+                    <span class="text-[10px] text-outline mt-xs block text-right">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+                </div>
+            </div>`;
+        } else {
+            const div = document.createElement('div');
+            div.className = 'flex justify-start';
+            div.innerHTML = `<div class="flex gap-sm max-w-[85%]">
+                <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
+                    <span class="material-symbols-outlined text-primary text-[18px]">${icon}</span>
+                </div>
+                <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
+                    <div class="font-body-md text-body-md text-on-surface markdown-body">${rendered}</div>
+                    <span class="text-[10px] text-outline mt-xs block text-right">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+                </div>
+            </div>`;
+            container.appendChild(div);
+        }
+        container.scrollTop = container.scrollHeight;
+
+        // 添加到已上传列表
+        addUploadedItems(uploaded.map(f => f.file_path), fileType, ocrResult);
+
+        // 将 OCR 结果保存到对话历史，供 Agent 上下文记忆
+        const ctxResult = await saveChatContext(ocrResult.markdown, 'assistant', currentSessionId);
+        if (ctxResult.session_id) {
+            currentSessionId = ctxResult.session_id;
+            persistSession();
+        }
     } catch (err) {
-        statusEl.textContent = '文件上传失败：' + err.message;
+        statusEl.textContent = `${typeLabel}处理失败：` + err.message;
     }
 }
 
@@ -183,12 +502,6 @@ function addAIMessage(initialText) {
     return div.querySelector('p');
 }
 
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
 async function sendMessage() {
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
@@ -200,14 +513,27 @@ async function sendMessage() {
     const aiMsgEl = addAIMessage('');
 
     try {
+        let pendingText = '';
+        let rafId = null;
+
         const result = await sendChatMessage(message, currentSessionId, (chunk, fullText) => {
-            aiMsgEl.textContent = fullText;
-            const container = document.getElementById('chat-messages');
-            container.scrollTop = container.scrollHeight;
+            pendingText = fullText;
+            if (!rafId) {
+                rafId = requestAnimationFrame(() => {
+                    aiMsgEl.innerHTML = marked.parse(pendingText);
+                    const container = document.getElementById('chat-messages');
+                    container.scrollTop = container.scrollHeight;
+                    rafId = null;
+                });
+            }
         });
+        if (rafId) cancelAnimationFrame(rafId);
+
         currentSessionId = result.sessionId;
+        persistSession();
         if (result.text) {
-            aiMsgEl.textContent = result.text;
+            aiMsgEl.innerHTML = marked.parse(result.text);
+            parseAndAddReimbursements(result.text);
         } else if (!aiMsgEl.textContent || aiMsgEl.textContent === '') {
             aiMsgEl.textContent = 'AI助手未返回内容，请检查API配置或稍后重试。';
         }
@@ -225,6 +551,11 @@ function handleChatKeydown(e) {
 
 function clearChat() {
     currentSessionId = null;
+    uploadedItems = [];
+    sessionStorage.removeItem('chat_session_id');
+    sessionStorage.removeItem('chat_uploaded_items');
+    sessionStorage.removeItem('chat_user_id');
+    renderUploadedList();
     const container = document.getElementById('chat-messages');
     container.innerHTML = '';
     addAIMessage('您好！我是FinFlow报销助手。会话已重置，请告诉我您需要什么帮助。');

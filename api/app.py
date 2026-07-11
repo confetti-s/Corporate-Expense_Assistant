@@ -15,6 +15,8 @@ from api.routes.budget_routes import router as budget_router
 from api.routes.progress_routes import router as progress_router
 from api.routes.approval_routes import router as approval_router
 from api.routes.upload_routes import router as upload_router
+from api.routes.ocr_routes import router as ocr_router
+from api.routes.voucher_ocr_routes import router as voucher_ocr_router
 from api.auth import get_current_user
 
 app = FastAPI(title="FinFlow Corp - 企业财务报销助手")
@@ -50,6 +52,8 @@ app.include_router(budget_router)
 app.include_router(progress_router)
 app.include_router(approval_router)
 app.include_router(upload_router)
+app.include_router(ocr_router)
+app.include_router(voucher_ocr_router)
 
 
 # ========== 页面路由 ==========

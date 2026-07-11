@@ -40,7 +40,7 @@ def seed_users(db: Session):
     password = hash_password("123456")
 
     employees = [
-        {"user_id": "E001", "username": "zhangsan", "name": "张三", "department_id": "D001", "email": "zhangsan@example.com"},
+        {"user_id": "E001", "username": "zhangsan", "name": "张三", "department_id": "D001", "email": "434226905@qq.com"},
         {"user_id": "E002", "username": "lisi", "name": "李四", "department_id": "D002", "email": "lisi@example.com"},
         {"user_id": "E003", "username": "wangwu", "name": "王五", "department_id": "D003", "email": "wangwu@example.com"},
         {"user_id": "E004", "username": "zhaoliu", "name": "赵六", "department_id": "D004", "email": "zhaoliu@example.com"},
@@ -50,7 +50,7 @@ def seed_users(db: Session):
 
     managers = [
         # D001 技术部
-        {"user_id": "S001", "username": "sunjl", "name": "孙经理", "department_id": "D001", "email": "sunjl@example.com"},
+        {"user_id": "S001", "username": "sunjl", "name": "孙经理", "department_id": "D001", "email": "434226905@qq.com"},
         # D002 市场部
         {"user_id": "M001", "username": "majl", "name": "马经理", "department_id": "D002", "email": "yin_20041128@qq.com"},
         # D003 财务部
@@ -177,7 +177,7 @@ def seed_reimbursements(db: Session):
 
     # 员工邮箱映射
     emp_emails = {
-        "E001": "zhangsan@example.com",
+        "E001": "434226905@qq.com",
         "E002": "lisi@example.com",
         "E003": "wangwu@example.com",
         "E004": "zhaoliu@example.com",
