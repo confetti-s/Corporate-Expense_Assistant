@@ -144,6 +144,7 @@ def get_progress_stats(user: dict = Depends(get_current_user)):
         this_month = datetime.now().replace(day=1)
         month_amount = db.query(func.sum(Reimbursements.total_amount)).filter(
             Reimbursements.employee_id == user["user_id"] if user["role"] not in ("manager", "admin") else True,
+            Reimbursements.status == "approved",
             Reimbursements.created_at >= this_month
         ).scalar() or 0.0
 
