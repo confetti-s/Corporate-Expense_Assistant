@@ -13,7 +13,7 @@ def seed_department_budget(db: Session):
     """每个部门每个费用类别一行预算"""
     departments = [
         {"department_id": "D001", "department_name": "技术部",
-         "budgets": {"差旅费": 150000, "业务招待费": 80000, "日常交通费": 50000, "其他费用": 100000}},
+         "budgets": {"差旅费": 6000, "业务招待费": 80000, "日常交通费": 50000, "其他费用": 100000}},
         {"department_id": "D002", "department_name": "市场部",
          "budgets": {"差旅费": 80000, "业务招待费": 100000, "日常交通费": 40000, "其他费用": 50000}},
         {"department_id": "D003", "department_name": "财务部",

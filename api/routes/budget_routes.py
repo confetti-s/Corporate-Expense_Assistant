@@ -45,7 +45,7 @@ def get_all_budgets(user: dict = Depends(get_current_user)):
                 spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                     Reimbursements.department_id == dept_id,
                     Reimbursements.expense_type == b.expense_type,
-                    Reimbursements.status == "approved"
+                    Reimbursements.status.in_(["approved", "pending"])
                 ).scalar() or 0.0
                 remaining = b.budget_amount - spent
                 usage_rate = round((spent / b.budget_amount * 100), 1) if b.budget_amount > 0 else 0
@@ -82,7 +82,7 @@ def get_all_budgets(user: dict = Depends(get_current_user)):
                 spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                     Reimbursements.department_id == dept.department_id,
                     Reimbursements.expense_type == dept.expense_type,
-                    Reimbursements.status == "approved"
+                    Reimbursements.status.in_(["approved", "pending"])
                 ).scalar() or 0.0
                 dept_map[dept.department_id]["budget_amount"] += dept.budget_amount
                 dept_map[dept.department_id]["spent_amount"] += spent
@@ -127,7 +127,7 @@ def get_budget_summary(user: dict = Depends(get_current_user)):
                 spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                     Reimbursements.department_id == dept_id,
                     Reimbursements.expense_type == b.expense_type,
-                    Reimbursements.status == "approved"
+                    Reimbursements.status.in_(["approved", "pending"])
                 ).scalar() or 0.0
                 total_spent += spent
             return {
@@ -151,7 +151,7 @@ def get_budget_summary(user: dict = Depends(get_current_user)):
                 spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                     Reimbursements.department_id == b.department_id,
                     Reimbursements.expense_type == b.expense_type,
-                    Reimbursements.status == "approved"
+                    Reimbursements.status.in_(["approved", "pending"])
                 ).scalar() or 0.0
                 total_spent += spent
             return {

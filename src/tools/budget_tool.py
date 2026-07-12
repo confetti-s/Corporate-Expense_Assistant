@@ -51,7 +51,7 @@ def query_department_budget(department_id: str, expense_type: str = "") -> str:
             spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                 Reimbursements.department_id == department_id,
                 Reimbursements.expense_type == b.expense_type,
-                Reimbursements.status == "approved"
+                Reimbursements.status.in_(["approved", "pending"])
             ).scalar() or 0.0
             b.spent_amount = spent
             b.remaining_amount = b.budget_amount - spent
@@ -92,7 +92,7 @@ def check_budget_sufficient(department_id: str, amount: float, expense_type: str
             spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                 Reimbursements.department_id == department_id,
                 Reimbursements.expense_type == expense_type,
-                Reimbursements.status == "approved"
+                Reimbursements.status.in_(["approved", "pending"])
             ).scalar() or 0.0
 
             remaining = budget.budget_amount - spent
@@ -111,7 +111,7 @@ def check_budget_sufficient(department_id: str, amount: float, expense_type: str
             total_budget = sum(b.budget_amount for b in budgets)
             total_spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                 Reimbursements.department_id == department_id,
-                Reimbursements.status == "approved"
+                Reimbursements.status.in_(["approved", "pending"])
             ).scalar() or 0.0
             remaining = total_budget - total_spent
             if remaining >= amount:
@@ -146,7 +146,7 @@ def get_all_department_budgets() -> str:
             spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                 Reimbursements.department_id == dept.department_id,
                 Reimbursements.expense_type == dept.expense_type,
-                Reimbursements.status == "approved"
+                Reimbursements.status.in_(["approved", "pending"])
             ).scalar() or 0.0
 
             remaining = dept.budget_amount - spent
@@ -188,7 +188,7 @@ def update_budget_spent():
             spent = db.query(func.sum(Reimbursements.total_amount)).filter(
                 Reimbursements.department_id == dept_budget.department_id,
                 Reimbursements.expense_type == dept_budget.expense_type,
-                Reimbursements.status == "approved"
+                Reimbursements.status.in_(["approved", "pending"])
             ).scalar() or 0.0
             dept_budget.spent_amount = spent
             dept_budget.remaining_amount = dept_budget.budget_amount - spent

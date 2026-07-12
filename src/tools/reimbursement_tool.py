@@ -438,7 +438,7 @@ def _check_budget_internal(db, department_id, amount, expense_type=""):
         spent = db.query(func.sum(Reimbursements.total_amount)).filter(
             Reimbursements.department_id == department_id,
             Reimbursements.expense_type == expense_type,
-            Reimbursements.status == "approved"
+            Reimbursements.status.in_(["approved", "pending"])
         ).scalar() or 0.0
 
         remaining = budget.budget_amount - spent
@@ -455,7 +455,7 @@ def _check_budget_internal(db, department_id, amount, expense_type=""):
         total_budget = sum(b.budget_amount for b in budgets)
         spent = db.query(func.sum(Reimbursements.total_amount)).filter(
             Reimbursements.department_id == department_id,
-            Reimbursements.status == "approved"
+            Reimbursements.status.in_(["approved", "pending"])
         ).scalar() or 0.0
 
         remaining = total_budget - spent
@@ -728,7 +728,10 @@ def submit_for_approval(reimbursement_no: str) -> str:
         total_with_vouchers = reimbursement.total_amount
         
         budget_sufficient, budget_message = _check_budget_internal(db, reimbursement.department_id, total_with_vouchers, reimbursement.expense_type)
-        
+
+        if not budget_sufficient:
+            return f"错误：预算不足，无法提交审批。\n{budget_message}\n请联系管理员调整预算或减少报销金额。"
+
         ai_suggestion = _build_ai_suggestion(db, reimbursement, valid_invoices, invalid_invoices, budget_sufficient, budget_message, valid_vouchers, invalid_vouchers)
         reimbursement.status = "pending"
         reimbursement.ai_suggestion = ai_suggestion
