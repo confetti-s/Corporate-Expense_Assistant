@@ -203,8 +203,8 @@ def create_reimbursement_split(
         result = "报销单已创建完成。"
         for reimb in created_reimbursements:
             result += f" {reimb['no']}"
-        result += "\n请逐张调用 view_reimbursement_detail 向用户展示，然后等待确认。\n"
-        
+        result += "\n[INSTRUCTION: 请逐张调用 view_reimbursement_detail 向用户展示，然后等待确认]"
+
         return result
     except Exception as e:
         db.rollback()
@@ -401,8 +401,8 @@ def create_reimbursement(
         db.commit()
 
         result = f"报销单已创建：{reimbursement_no}\n"
-        result += "请调用 view_reimbursement_detail 展示详情，然后等待用户确认。"
-        
+        result += "[INSTRUCTION: 请调用 view_reimbursement_detail 展示详情，然后等待用户确认]"
+
         return result
     except Exception as e:
         db.rollback()

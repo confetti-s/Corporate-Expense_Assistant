@@ -15,12 +15,126 @@ body {
 .chat-container::-webkit-scrollbar-track { background: transparent; }
 .chat-container::-webkit-scrollbar-thumb { background: #E2E8F0; border-radius: 10px; }
 
-/* 聊天消息行间距 */
-#chat-messages .font-body-md {
-    line-height: 22px;
+/* Markdown 渲染样式 */
+.markdown-body {
+    font-size: 14px;
+    line-height: 1.7;
+    color: #0d1c2e;
+    word-wrap: break-word;
 }
 .markdown-body p {
-    line-height: 22px;
+    margin: 6px 0;
+    line-height: 1.7;
+}
+.markdown-body h1 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 16px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #c4c5d5;
+}
+.markdown-body h2 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 14px 0 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #e2e8f0;
+}
+.markdown-body h3 {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 12px 0 4px;
+}
+.markdown-body h4 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 8px 0 4px;
+}
+.markdown-body ul, .markdown-body ol {
+    margin: 6px 0;
+    padding-left: 24px;
+}
+.markdown-body li {
+    margin: 3px 0;
+    line-height: 1.6;
+}
+.markdown-body li > ul, .markdown-body li > ol {
+    margin: 2px 0;
+}
+.markdown-body table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0;
+    font-size: 13px;
+}
+.markdown-body th,
+.markdown-body td {
+    border: 1px solid #c4c5d5;
+    padding: 6px 10px;
+    text-align: left;
+    vertical-align: top;
+}
+.markdown-body th {
+    background: #eff4ff;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.markdown-body tr:nth-child(even) {
+    background: #f8f9ff;
+}
+.markdown-body code {
+    background: #e6eeff;
+    color: #00288e;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-family: 'Courier New', Consolas, monospace;
+}
+.markdown-body pre {
+    background: #1e293b;
+    color: #e2e8f0;
+    padding: 12px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 8px 0;
+    font-size: 13px;
+    line-height: 1.5;
+}
+.markdown-body pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+    font-size: inherit;
+}
+.markdown-body blockquote {
+    border-left: 4px solid #3755c3;
+    margin: 8px 0;
+    padding: 4px 12px;
+    color: #444653;
+    background: #eff4ff;
+    border-radius: 0 4px 4px 0;
+}
+.markdown-body blockquote p {
+    margin: 4px 0;
+}
+.markdown-body hr {
+    border: none;
+    border-top: 1px solid #c4c5d5;
+    margin: 12px 0;
+}
+.markdown-body strong {
+    font-weight: 600;
+}
+.markdown-body em {
+    font-style: italic;
+}
+.markdown-body a {
+    color: #0060ac;
+    text-decoration: underline;
+}
+.markdown-body a:hover {
+    color: #00288e;
 }
 
 /* 玻璃效果 */
@@ -69,38 +183,4 @@ body {
 .toast-leave {
     transform: translateY(200%);
     opacity: 0;
-}
-
-/* Markdown 表格样式 */
-.markdown-body table {
-    border-collapse: collapse;
-    width: 100%;
-    margin: 8px 0;
-}
-.markdown-body th,
-.markdown-body td {
-    border: 1px solid #c4c5d5;
-    padding: 6px 12px;
-    text-align: left;
-}
-.markdown-body th {
-    background: #eff4ff;
-    font-weight: 600;
-}
-.markdown-body h3 {
-    font-size: 16px;
-    font-weight: 600;
-    margin: 8px 0 4px;
-}
-.markdown-body h4 {
-    font-size: 14px;
-    font-weight: 600;
-    margin: 6px 0 4px;
-}
-.markdown-body p {
-    margin: 4px 0;
-}
-.markdown-body ul, .markdown-body ol {
-    margin: 4px 0;
-    padding-left: 20px;
 }

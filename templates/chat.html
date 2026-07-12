@@ -74,8 +74,8 @@
                     <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
                         <span class="material-symbols-outlined text-primary text-[18px]">bolt</span>
                     </div>
-                    <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
-                        <p class="font-body-md text-body-md text-on-surface">您好！我是FinFlow报销助手。<br/>您可以上传发票图片，或者直接告诉我您要报销的费用，我会帮您完成报销流程。</p>
+                    <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none markdown-body">
+                        您好！我是FinFlow报销助手。<br/>您可以上传发票图片，或者直接告诉我您要报销的费用，我会帮您完成报销流程。
                     </div>
                 </div>
             </div>
@@ -161,7 +161,7 @@ let uploadedItems = JSON.parse(sessionStorage.getItem('chat_uploaded_items') || 
                         addUserMessage(msg.content);
                     } else {
                         const el = addAIMessage('');
-                        el.innerHTML = marked.parse(msg.content);
+                        el.innerHTML = marked.parse(stripInstructions(msg.content));
                     }
                 });
             }
@@ -612,10 +612,7 @@ async function handleUploadFiles(files, fileType) {
                 <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
                     <span class="material-symbols-outlined text-primary text-[18px]">${icon}</span>
                 </div>
-                <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
-                    <div class="font-body-md text-body-md text-on-surface markdown-body">${rendered}</div>
-                    <span class="text-[10px] text-outline mt-xs block text-right">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
-                </div>
+                <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none markdown-body">${rendered}</div>
             </div>`;
         } else {
             const div = document.createElement('div');
@@ -624,10 +621,7 @@ async function handleUploadFiles(files, fileType) {
                 <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
                     <span class="material-symbols-outlined text-primary text-[18px]">${icon}</span>
                 </div>
-                <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
-                    <div class="font-body-md text-body-md text-on-surface markdown-body">${rendered}</div>
-                    <span class="text-[10px] text-outline mt-xs block text-right">${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
-                </div>
+                <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none markdown-body">${rendered}</div>
             </div>`;
             container.appendChild(div);
         }
@@ -659,6 +653,10 @@ function addUserMessage(text) {
     container.scrollTop = container.scrollHeight;
 }
 
+function stripInstructions(text) {
+    return text.replace(/\[INSTRUCTION:[\s\S]*?\]/g, '').replace(/\n{2,}/g, '\n').trim();
+}
+
 function addAIMessage(initialText) {
     const container = document.getElementById('chat-messages');
     const div = document.createElement('div');
@@ -667,13 +665,11 @@ function addAIMessage(initialText) {
         <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center flex-shrink-0">
             <span class="material-symbols-outlined text-primary text-[18px]">bolt</span>
         </div>
-        <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none">
-            <p class="font-body-md text-body-md text-on-surface" id="ai-msg-${Date.now()}">${escapeHtml(initialText || '')}</p>
-        </div>
+        <div class="bg-surface-container border border-outline-variant/50 p-md rounded-xl rounded-tl-none markdown-body" id="ai-msg-${Date.now()}">${escapeHtml(initialText || '')}</div>
     </div>`;
     container.appendChild(div);
     container.scrollTop = container.scrollHeight;
-    return div.querySelector('p');
+    return div.querySelector('.markdown-body');
 }
 
 async function sendMessage() {
@@ -694,7 +690,7 @@ async function sendMessage() {
             pendingText = fullText;
             if (!rafId) {
                 rafId = requestAnimationFrame(() => {
-                    aiMsgEl.innerHTML = marked.parse(pendingText);
+                    aiMsgEl.innerHTML = marked.parse(stripInstructions(pendingText));
                     const container = document.getElementById('chat-messages');
                     container.scrollTop = container.scrollHeight;
                     rafId = null;
@@ -706,7 +702,8 @@ async function sendMessage() {
         currentSessionId = result.sessionId;
         persistSession();
         if (result.text) {
-            aiMsgEl.innerHTML = marked.parse(result.text);
+            const displayText = stripInstructions(result.text);
+            aiMsgEl.innerHTML = marked.parse(displayText);
             parseAndAddReimbursements(result.text);
             parseAndAddPDFs(result.text);
         } else if (!aiMsgEl.textContent || aiMsgEl.textContent === '') {
