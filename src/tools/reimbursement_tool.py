@@ -145,6 +145,13 @@ def create_reimbursement_split(
             for v in voucher_list:
                 v.reimbursement_id = valid_reimb.id
                 v.reimbursement_no = valid_no
+                if not v.sub_expense_type:
+                    category_to_default_sub = {
+                        "差旅费": "出差交通",
+                        "业务招待费": "餐饮",
+                        "日常交通费": "市内公务交通",
+                    }
+                    v.sub_expense_type = category_to_default_sub.get(expense_type)
             
             db.commit()
             
@@ -386,10 +393,10 @@ def create_reimbursement(
         db.commit()
 
         linked_voucher_count = 0
+        unresolved_vouchers = []
         for v in voucher_list:
             v.reimbursement_id = record.id
             v.reimbursement_no = reimbursement_no
-            # 凭证的小分类默认从报销单大分类推导
             if not v.sub_expense_type:
                 category_to_default_sub = {
                     "差旅费": "出差交通",
@@ -397,8 +404,16 @@ def create_reimbursement(
                     "日常交通费": "市内公务交通",
                 }
                 v.sub_expense_type = category_to_default_sub.get(expense_type)
+                if not v.sub_expense_type:
+                    unresolved_vouchers.append(v)
             linked_voucher_count += 1
         db.commit()
+
+        if unresolved_vouchers:
+            voucher_info = "、".join(f"凭证#{v.id}" for v in unresolved_vouchers)
+            result = f"报销单已创建：{reimbursement_no}\n"
+            result += f"[INSTRUCTION: 以下凭证的费用项目无法自动识别：{voucher_info}，请向用户询问每张凭证的费用项目（如：出差交通、住宿、餐饮、市内公务交通、办公用品、快递、停车费等），然后调用update_reimbursement更新]"
+            return result
 
         result = f"报销单已创建：{reimbursement_no}\n"
         result += "[INSTRUCTION: 请调用 view_reimbursement_detail 展示详情，然后等待用户确认]"

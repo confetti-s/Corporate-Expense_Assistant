@@ -203,7 +203,11 @@ def _parse_voucher_result(ocr_result: dict) -> dict:
         payee = _extract_payee_from_text(full_text)
 
     # 凭证类型判断
-    if "微信" in full_text or "WeChat" in full_text or "零钱" in full_text or "财付通" in full_text:
+    if "铁路电子客票" in full_text or "12306" in full_text or "火车票" in full_text:
+        voucher_type = "火车票"
+    elif "航空" in full_text or "机票" in full_text or "航班" in full_text:
+        voucher_type = "机票"
+    elif "微信" in full_text or "WeChat" in full_text or "零钱" in full_text or "财付通" in full_text:
         voucher_type = "微信付款截图"
     elif "支付宝" in full_text or "Alipay" in full_text or "花呗" in full_text:
         voucher_type = "支付宝付款截图"
@@ -214,12 +218,35 @@ def _parse_voucher_result(ocr_result: dict) -> dict:
     else:
         voucher_type = "其他凭证"
 
+    # 自动提取描述信息（行程+座位/舱位）
+    description_parts = []
+
+    # 火车票：提取出发地→目的地、座位类型
+    if voucher_type == "火车票":
+        route_match = re.search(r'([\u4e00-\u9fa5]{2,6})站.*?([GDKCTZ]\d{1,5}).*?([\u4e00-\u9fa5]{2,6})站', full_text)
+        if route_match:
+            description_parts.append(f"{route_match.group(1)}→{route_match.group(3)}，{route_match.group(2)}")
+        seat_match = re.search(r'(商务座|特等座|一等座|二等座|硬座|硬卧|软卧)', full_text)
+        if seat_match:
+            description_parts.append(seat_match.group(1))
+
+    # 机票：提取出发地→目的地、舱位
+    elif voucher_type == "机票":
+        route_match = re.search(r'([\u4e00-\u9fa5]{2,6})[—\-]([\u4e00-\u9fa5]{2,6})', full_text)
+        if route_match:
+            description_parts.append(f"{route_match.group(1)}→{route_match.group(2)}")
+        cabin_match = re.search(r'(头等舱|商务舱|经济舱)', full_text)
+        if cabin_match:
+            description_parts.append(cabin_match.group(1))
+
+    description = "，".join(description_parts)
+
     return {
         "voucher_type": voucher_type,
         "amount": amount,
         "payment_date": payment_date,
         "payee": payee,
-        "description": "",
+        "description": description,
         "ocr_result": formatted_text,
     }
 

@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, ToolMessage
 from src.tools import ALL_TOOLS
 from prompts import build_system_prompt
 from config import DASHSCOPE_API_KEY, WORKSPACE_ID, MODEL_NAME, ALIBABA_MAAS_BASE_URL
@@ -55,11 +55,18 @@ def run_agent(user_query: str, chat_history: list = None):
         yielded_any = False
 
         for event in agent.stream({"messages": messages}, stream_mode="messages"):
-            if isinstance(event, tuple) and len(event) >= 1:
+            if isinstance(event, tuple) and len(event) >= 2:
                 msg = event[0]
+                # 只输出最终AI回复，过滤掉ToolMessage和工具调用过程中的中间消息
+                if isinstance(msg, ToolMessage):
+                    continue
                 if hasattr(msg, "content") and msg.content:
+                    # 过滤Agent内部错误信息（如工具调用失败的重试消息）
+                    content = msg.content
+                    if content.startswith("Error:") and "is not a valid tool" in content:
+                        continue
                     yielded_any = True
-                    yield msg.content
+                    yield content
 
         if not yielded_any:
             yield "抱歉，我无法理解您的请求，请换一种方式描述。"

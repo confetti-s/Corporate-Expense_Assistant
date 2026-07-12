@@ -41,23 +41,26 @@ def _determine_sub_expense_type(invoice):
 
 
 def _determine_voucher_sub_expense_type(voucher):
-    """根据凭证类型和收款方名称推断费用小分类"""
+    """根据凭证类型、收款方名称和描述推断费用小分类"""
     if voucher.sub_expense_type:
         return voucher.sub_expense_type
 
     payee = voucher.payee or ""
-    payee_lower = payee.lower()
-    if any(kw in payee_lower for kw in ["酒店", "宾馆", "旅馆", "公寓", "民宿", "希尔顿", "如家", "汉庭", "全季", "锦江", "万豪", "洲际", "香格里拉"]):
+    desc = voucher.description or ""
+    ocr = voucher.ocr_result or ""
+    vtype = voucher.voucher_type or ""
+    combined = (payee + " " + desc + " " + ocr + " " + vtype).lower()
+    if any(kw in combined for kw in ["酒店", "宾馆", "旅馆", "公寓", "民宿", "希尔顿", "如家", "汉庭", "全季", "锦江", "万豪", "洲际", "香格里拉"]):
         return "住宿"
-    if any(kw in payee_lower for kw in ["餐饮", "饭店", "餐厅", "酒楼", "食府", "美食", "茶楼", "咖啡", "肯德基", "麦当劳", "星巴克", "火锅", "烧烤"]):
+    if any(kw in combined for kw in ["餐饮", "饭店", "餐厅", "酒楼", "食府", "美食", "茶楼", "咖啡", "肯德基", "麦当劳", "星巴克", "火锅", "烧烤"]):
         return "餐饮"
-    if any(kw in payee_lower for kw in ["航空", "机票", "铁路", "12306", "出租", "网约车", "滴滴", "神州", "花小猪", "高德", "打车", "曹操", "T3出行", "美团打车", "哈啰"]):
+    if any(kw in combined for kw in ["航空", "机票", "铁路", "12306", "电子客票", "火车", "高铁", "动车", "出租", "网约车", "滴滴", "神州", "花小猪", "高德", "打车", "曹操", "T3出行", "美团打车", "哈啰", "客运", "汽车票", "船票"]):
         return "出差交通"
-    if any(kw in payee_lower for kw in ["办公用品", "文具", "打印", "复印", "办公设备"]):
+    if any(kw in combined for kw in ["办公用品", "文具", "打印", "复印", "办公设备"]):
         return "办公用品"
-    if any(kw in payee_lower for kw in ["快递", "物流", "顺丰", "中通", "圆通", "韵达", "申通"]):
+    if any(kw in combined for kw in ["快递", "物流", "顺丰", "中通", "圆通", "韵达", "申通"]):
         return "快递"
-    if any(kw in payee_lower for kw in ["停车", "高速", "路桥"]):
+    if any(kw in combined for kw in ["停车", "高速", "路桥"]):
         return "停车费"
 
     return ""
@@ -331,7 +334,7 @@ def _check_travel_expense(invoice, sub_type, user_role, db):
                     return f"基层员工高铁/动车仅限二等座，实际乘坐{desc}"
                 # 描述为空时，要求补充座位信息
                 if not desc or "座" not in desc:
-                    return f"火车票缺少座位信息，无法判断是否合规（基层员工仅限二等座）。请先调用update_invoice_description补充座位类型"
+                    return "[NEED_INFO]火车票缺少座位信息，无法判断是否合规（基层员工仅限二等座）。请向用户询问座位类型（如：商务座、一等座、二等座等）"
             # manager及以上可坐商务座，无限制
 
         # 机票：检查舱位和金额
@@ -343,7 +346,7 @@ def _check_travel_expense(invoice, sub_type, user_role, db):
                     return f"基层员工飞机经济舱单程上限1000元，实际 {invoice.amount:,.2f} 元"
                 # 描述为空时，要求补充舱位信息
                 if not desc or "舱" not in desc:
-                    return f"机票缺少舱位信息，无法判断是否合规（基层员工仅限经济舱≤1000元）。请先调用update_invoice_description补充舱位信息"
+                    return "[NEED_INFO]机票缺少舱位信息，无法判断是否合规（基层员工仅限经济舱≤1000元）。请向用户询问舱位类型（如：经济舱、商务舱、头等舱等）"
             elif user_role == "manager":
                 if "头等舱" in desc:
                     return f"部门经理飞机仅限商务舱，实际乘坐头等舱"
@@ -371,7 +374,7 @@ def _check_travel_expense(invoice, sub_type, user_role, db):
             return None
         else:
             # 无描述信息，无法判断每晚单价，默认标记为需补充信息
-            return f"住宿发票缺少描述信息，无法判断每晚单价是否超标（{tier_name}城市{_role_display(user_role)}标准：{limit}元/晚）。请先调用update_invoice_description补充入住/退房日期和房型，再重新进行合规审查"
+            return f"[NEED_INFO]住宿发票缺少描述信息，无法判断每晚单价是否超标（{tier_name}城市{_role_display(user_role)}标准：{limit}元/晚）。请向用户询问入住和退房日期"
 
     elif sub_type == "餐补":
         # 餐补无需发票，按天数计算，此处仅做职级标准校验

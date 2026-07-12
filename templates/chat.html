@@ -654,7 +654,9 @@ function addUserMessage(text) {
 }
 
 function stripInstructions(text) {
-    return text.replace(/\[INSTRUCTION:[\s\S]*?\]/g, '').replace(/\n{2,}/g, '\n').trim();
+    return text.replace(/\[INSTRUCTION:[\s\S]*?\]/g, '')
+               .replace(/\[NEED_INFO\]/g, '')
+               .replace(/\n{2,}/g, '\n').trim();
 }
 
 function addAIMessage(initialText) {
