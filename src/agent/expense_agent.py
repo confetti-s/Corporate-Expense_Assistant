@@ -9,6 +9,9 @@ from langchain_core.messages import AIMessage, ToolMessage
 from src.tools import ALL_TOOLS
 from prompts import build_system_prompt
 from config import DASHSCOPE_API_KEY, WORKSPACE_ID, MODEL_NAME, ALIBABA_MAAS_BASE_URL
+
+# 面向用户的工具：这些工具的返回结果需要展示给用户
+USER_FACING_TOOLS = {"查看报销单详情"}
 _agent_instance = None
 
 TAB_MAP = {
@@ -57,16 +60,23 @@ def run_agent(user_query: str, chat_history: list = None):
         for event in agent.stream({"messages": messages}, stream_mode="messages"):
             if isinstance(event, tuple) and len(event) >= 2:
                 msg = event[0]
-                # 只输出最终AI回复，过滤掉ToolMessage和工具调用过程中的中间消息
                 if isinstance(msg, ToolMessage):
-                    continue
+                    # 只放行面向用户的工具结果，其余内部工具结果过滤
+                    tool_name = getattr(msg, "name", "")
+                    if tool_name not in USER_FACING_TOOLS:
+                        continue
                 if hasattr(msg, "content") and msg.content:
-                    # 过滤Agent内部错误信息（如工具调用失败的重试消息）
                     content = msg.content
+                    # 过滤Agent内部错误信息
                     if content.startswith("Error:") and "is not a valid tool" in content:
                         continue
-                    yielded_any = True
-                    yield content
+                    # 在后端也剥离内部标记，防止泄露
+                    content = re.sub(r'\[INSTRUCTION:[\s\S]*?\]', '', content)
+                    content = re.sub(r'\[NEED_INFO\]', '', content)
+                    content = re.sub(r'\n{2,}', '\n', content).strip()
+                    if content:
+                        yielded_any = True
+                        yield content
 
         if not yielded_any:
             yield "抱歉，我无法理解您的请求，请换一种方式描述。"
